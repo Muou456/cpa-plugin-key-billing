@@ -7,7 +7,7 @@ set -euo pipefail
 # Each argument names one CLIProxyAPI to test, and they are tested in turn:
 #
 #	不传参数            GitHub 上的最新发布版
-#	7.2.136             GitHub 上的该发布版
+#	7.3.7               GitHub 上的该发布版
 #	../CLIProxyAPI      代码目录，现场构建
 #	../cli-proxy-api    可执行文件，直接使用
 readonly github_repo="router-for-me/CLIProxyAPI"
