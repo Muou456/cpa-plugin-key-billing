@@ -109,7 +109,6 @@ function renderKeys() {
         {
           "aria-label": m("ui.maximum_concurrent_requests_for_value", { v0: name }),
           disabled: deleted || saving,
-          "data-tip": m("ui.maximum_concurrent_requests_0_means_unlimited"),
           onchange: (event) =>
             guard(async () => {
               const value = event.target.value;

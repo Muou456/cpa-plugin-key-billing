@@ -387,7 +387,7 @@ function renderAIBalanceRow(balance, fetchedAt) {
     el(
       "div",
       { class: "ai-balance-head" },
-      el("span", { class: "ai-balance-value", "data-tip": m(balance.label), text: formatBalance(balance.amount, balance.currency) }),
+      el("span", { class: "ai-balance-value", text: formatBalance(balance.amount, balance.currency) }),
       balance.label !== "ui.balance" && el("span", { class: "ai-balance-label", text: m(balance.label) }),
       fetchedAt &&
         el("time", {

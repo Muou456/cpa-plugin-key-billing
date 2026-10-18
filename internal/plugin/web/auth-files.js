@@ -401,10 +401,7 @@ function renderAuthFileRow(file, account) {
           type: "button",
           class: "labeled-icon-button round-icon-button",
           "aria-label": m("ui.reset_quota"),
-          ...hoverTooltipProps(
-            () => [el("span", { text: m("ui.reset_opportunities", { count: quota.rate_limit_reset_credits_available_count }) })],
-            true
-          ),
+          "data-tip": m("ui.reset_quota"),
           disabled: !canResetAuthQuota(file, account),
           onclick: () => guard(() => resetAuthQuota(file, account))
         },

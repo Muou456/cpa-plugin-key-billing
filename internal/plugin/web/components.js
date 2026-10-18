@@ -21,10 +21,10 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
-function metricTag(metrics, title) {
+function metricTag(metrics, accessibleLabel) {
   return el(
     "span",
-    { class: "tag plain metrics", title, "aria-label": title },
+    { class: "tag plain metrics", "aria-label": accessibleLabel },
     metrics.flatMap(([label, value], index) => [
       index > 0 && el("span", { class: "tag-separator", text: DISPLAY_SEPARATOR, "aria-hidden": "true" }),
       el("span", { class: "tag-metric" }, el("span", { class: "tag-label", text: label }), el("span", { class: "tag-value", text: value }))

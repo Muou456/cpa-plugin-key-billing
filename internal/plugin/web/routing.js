@@ -132,15 +132,11 @@ function routingSection(selection, kind, title, options, rerender) {
         el("span", { text: title })
       ),
       kind === "credentials"
-        ? compactEnabledToggle(
-            selection.enabledOnly,
-            (checked) => {
-              selection.enabledOnly = checked;
-              saveViewPreference("admin", selection.preference, checked);
-              rerender();
-            },
-            m("ui.show_only_enabled_upstream_credentials")
-          )
+        ? compactEnabledToggle(selection.enabledOnly, (checked) => {
+            selection.enabledOnly = checked;
+            saveViewPreference("admin", selection.preference, checked);
+            rerender();
+          })
         : null,
       el("span", { class: "routing-section-count", text: selected + "/" + options.length })
     ),
@@ -154,10 +150,10 @@ function routingSection(selection, kind, title, options, rerender) {
   );
 }
 
-function compactEnabledToggle(checked, onChange, title) {
+function compactEnabledToggle(checked, onChange) {
   return el(
     "label",
-    { class: "toggle-filter compact-toggle", "data-tip": title },
+    { class: "toggle-filter compact-toggle" },
     switchControl({
       input: el("input", {
         type: "checkbox",
@@ -315,8 +311,9 @@ function routeChoiceRow(selection, item, rerender) {
   const next = { none: "allow", allow: "deny", deny: "none" }[state];
   const names = { none: m("ui.not_selected"), allow: m("ui.allowlist"), deny: m("ui.denylist") };
   const key = kind + ":" + (kind === "provider" ? value.source + ":" + value.provider : value);
-  const title = m("ui.valuevalue_value_click_to_switch_to_value", {
-    v0: kind === "credential" && iconName ? m("ui.join", { v0: credentialSourceLabel(item.source), v1: DISPLAY_SEPARATOR, v2: "" }) : "",
+  const source = kind === "credential" && item.source ? credentialSourceLabel(item.source) : null;
+  const ariaLabel = m("ui.valuevalue_value_click_to_switch_to_value", {
+    v0: source ? m("ui.join", { v0: source, v1: DISPLAY_SEPARATOR, v2: "" }) : "",
     v1: label,
     v2: names[state],
     v3: names[next]
@@ -329,8 +326,19 @@ function routeChoiceRow(selection, item, rerender) {
       "data-state": state,
       "data-routing-choice": key,
       "data-routing-focus": key,
-      "data-tip": title,
-      "aria-label": title,
+      tooltip: () => [
+        el(
+          "div",
+          { class: "hover-tooltip-body" },
+          source ? m("ui.join", { v0: source, v1: DISPLAY_SEPARATOR, v2: "" }) : null,
+          chipText(text || label),
+          "\n",
+          m("ui.metric_value", { v0: m("ui.current_state"), v1: names[state] }),
+          "\n",
+          m("ui.metric_value", { v0: m("ui.click_to_switch_to"), v1: names[next] })
+        )
+      ],
+      "aria-label": ariaLabel,
       onclick: () => {
         setRouteChoice(selection, kind, value, next);
         rerender();
@@ -372,7 +380,7 @@ function routeCredentialChoices(selection, credentials, term) {
       text: maskedTailText(item.provider, credentialName(item)),
       source: item.source,
       iconName: credentialIcon(item),
-      badge: item.disabled ? m("ui.disabled") : item.unavailable ? m("ui.none_available") : ""
+      badge: item.disabled ? m("ui.disabled") : item.unavailable ? m("ui.unavailable") : ""
     });
   }
   for (const ref of selectedRouteValues(selection, "credential")) {
@@ -382,7 +390,7 @@ function routeCredentialChoices(selection, credentials, term) {
         value: ref,
         label: m("ui.credential_no_longer_exists"),
         iconName: "key",
-        badge: m("ui.none_available")
+        badge: m("ui.unavailable")
       });
   }
   return options;

@@ -1,13 +1,5 @@
 const QUOTA_DIMENSIONS = [
-  {
-    key: "amount_usd",
-    metric: "amount_usd",
-    label: m("ui.amount"),
-    inputLabel: m("quota.amount_limit"),
-    planValue: usd,
-    format: usd,
-    exact: usd
-  },
+  { key: "amount_usd", metric: "amount_usd", label: m("ui.amount"), inputLabel: m("quota.amount_limit"), planValue: usd, format: usd },
   {
     key: "token_limit",
     metric: "tokens",
@@ -23,8 +15,7 @@ const QUOTA_DIMENSIONS = [
     label: m("ui.requests"),
     inputLabel: m("quota.request_limit"),
     planValue: (value) => m("quota.request_count", { count: value, value: int(value) }),
-    format: int,
-    exact: int
+    format: int
   }
 ];
 const PERIOD_UNITS = [[86400, m("ui.days")], [3600, m("ui.hours")], [60, m("ui.minutes")], [1, m("ui.seconds")]];
@@ -112,11 +103,7 @@ function renderQuotaWindows(view, account = false) {
     view.windows.map((window) => {
       const dimensions = window.dimensions;
       const single = dimensions.length === 1;
-      const reset = el("span", {
-        class: "muted",
-        text: quotaWindowResetLabel(window, account),
-        "data-tip": window.started ? m("ui.resets_at_value", { v0: when(window.end_at) }) : null
-      });
+      const reset = el("span", { class: "muted", text: quotaWindowResetLabel(window, account) });
       return el(
         "div",
         { class: "quota-window" + (single ? " quota-single" : "") },
@@ -131,23 +118,10 @@ function renderQuotaWindows(view, account = false) {
             el(
               "div",
               { class: "quota-heading" },
-              el(single ? "b" : "span", {
-                class: single ? "" : "muted",
-                text: label,
-                "data-tip": single ? label : null,
-                "data-tip-overflow": ""
-              }),
+              el(single ? "b" : "span", { class: single ? "" : "muted", text: label }),
               el("span", {
                 class: "mono" + (balance.blocked ? " blocked" : ""),
-                text: metric.format(balance.remaining) + DISPLAY_SLASH + metric.format(balance.limit),
-                "data-tip": m("ui.valuevalueremaining_valuevalueused_value_value", {
-                  v0: metric.label,
-                  v1: DISPLAY_SEPARATOR,
-                  v2: metric.exact(balance.remaining),
-                  v3: DISPLAY_SEPARATOR,
-                  v4: metric.exact(balance.used),
-                  v5: metric.exact(balance.limit)
-                })
+                text: metric.format(balance.remaining) + DISPLAY_SLASH + metric.format(balance.limit)
               }),
               single ? reset : null
             ),
