@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.4
+
+### 前端
+
+- 在 CPAMC 中也可使用 API Key 页的「导入备注」，导入 CPAMC 在当前浏览器中为该服务器保存的 API Key 名称；需通过 CPA 的地址打开 CPAMC。
+
 ## v1.4.3
 
 ### 升级须知
