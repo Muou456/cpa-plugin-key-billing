@@ -1,102 +1,55 @@
 package billing
 
-import (
-	"net/http"
-	"time"
-)
+import "time"
 
-type CredentialUsageStats struct {
-	Requests        int64        `json:"requests"`
-	Failed          int64        `json:"failed"`
-	InputTokens     int64        `json:"input_tokens"`
-	CacheReadTokens int64        `json:"cache_read_tokens"`
-	OutputTokens    int64        `json:"output_tokens"`
-	CostUSD         float64      `json:"cost_usd"`
-	Models          []ModelUsage `json:"models,omitempty"`
+// QuotaReport is what one response said about its credential's quota under
+// Provider. A response reports only the windows of the limit it used.
+type QuotaReport struct {
+	Provider         string
+	Plan             string
+	CreditBalance    string
+	CreditsUnlimited *bool
+	Windows          []QuotaReportWindow
 }
 
-// ModelUsage is one model's part of a usage total, most tokens first.
-// InputTokens include cached ones.
-type ModelUsage struct {
-	Model            string  `json:"model"`
-	Requests         int64   `json:"requests"`
-	InputTokens      int64   `json:"input_tokens"`
-	OutputTokens     int64   `json:"output_tokens"`
-	CacheReadTokens  int64   `json:"cache_read_tokens"`
-	CacheWriteTokens int64   `json:"cache_write_tokens"`
-	CostUSD          float64 `json:"cost_usd"`
+// QuotaReportWindow is a quota window as one response reported it. Its limit
+// key and length identify it from one report to the next.
+type QuotaReportWindow struct {
+	LimitKey    string
+	Seconds     int64
+	UsedPercent float64
+	// ResetAt is zero when the response did not say when the window resets.
+	ResetAt time.Time
 }
 
-func (s *Store) CredentialUsageStats(authIndexes []string, scope string, from, to time.Time) (map[string]CredentialUsageStats, error) {
-	from, to, err := usageTimeRange(from, to, s.Now())
-	if err != nil {
-		return nil, err
-	}
-	return withRepository(s, func(repo Repository) (map[string]CredentialUsageStats, error) {
-		return repo.CredentialUsageStats(authIndexes, scope, from, to)
+// QuotaObservation is the report stored for a request made At.
+type QuotaObservation struct {
+	At time.Time
+	QuotaReport
+}
+
+// LatestQuotaReports returns, oldest first, the newest report made since since
+// of each quota window and value on each credential. An observation keeps only
+// the windows and values it is the newest report of.
+func (s *Store) LatestQuotaReports(authIndexes []string, since time.Time) (map[string][]QuotaObservation, error) {
+	return withRepository(s, func(repo Repository) (map[string][]QuotaObservation, error) {
+		return repo.LatestQuotaReports(authIndexes, since)
 	})
 }
 
-// QuotaHeaderObservation is the quota headers stored for a request made At.
-type QuotaHeaderObservation struct {
-	Provider string
-	At       time.Time
-	Headers  http.Header
+// QuotaWindowHistory is what a credential's requests reported about one quota
+// window, oldest first.
+type QuotaWindowHistory struct {
+	LimitKey string
+	Seconds  int64
+	Reports  []QuotaWindowReport
 }
 
-// LatestQuotaHeaders returns, oldest first, the requests made since since
-// that hold the newest stored report of some quota window or value on each
-// credential.
-func (s *Store) LatestQuotaHeaders(authIndexes []string, since time.Time) (map[string][]QuotaHeaderObservation, error) {
-	return withRepository(s, func(repo Repository) (map[string][]QuotaHeaderObservation, error) {
-		return repo.LatestQuotaHeaders(authIndexes, since)
-	})
-}
-
-// QuotaHeaderHistory returns the quota headers stored for a credential's
-// requests made from from until to, oldest first. Runs of identical reports
-// keep only their first and last request.
-func (s *Store) QuotaHeaderHistory(authIndex string, from, to time.Time) ([]QuotaHeaderObservation, error) {
-	return withRepository(s, func(repo Repository) ([]QuotaHeaderObservation, error) {
-		return repo.QuotaHeaderHistory(authIndex, from, to)
-	})
-}
-
-// QuotaPeriod selects the requests to Provider on AuthIndex made from Start
-// until End whose upstream model matches Models.
-type QuotaPeriod struct {
-	AuthIndex, Provider string     `json:"-"`
-	Start               time.Time  `json:"start"`
-	End                 time.Time  `json:"end"`
-	Models              ModelMatch `json:"models"`
-}
-
-// ModelMatch selects upstream models containing one of Include and none of
-// Exclude, ignoring case. An empty Include matches every model.
-type ModelMatch struct {
-	Include []string `json:"include,omitempty"`
-	Exclude []string `json:"exclude,omitempty"`
-}
-
-type QuotaPeriodUsage struct {
-	Tokens  int64        `json:"tokens"`
-	CostUSD float64      `json:"cost_usd"`
-	Models  []ModelUsage `json:"models,omitempty"`
-}
-
-// QuotaPeriodUsage sums each period's requests. Breaking them down by model
-// costs about twice as much.
-func (s *Store) QuotaPeriodUsage(scope string, periods []QuotaPeriod, byModel bool) ([]QuotaPeriodUsage, error) {
-	return withRepository(s, func(repo Repository) ([]QuotaPeriodUsage, error) {
-		usage := make([]QuotaPeriodUsage, len(periods))
-		for i, period := range periods {
-			value, err := repo.QuotaPeriodUsage(period, scope, byModel)
-			if err != nil {
-				return nil, err
-			}
-			usage[i] = value
-		}
-		return usage, nil
+// QuotaWindowHistories returns what a credential's requests to provider made
+// from from until to reported about each window.
+func (s *Store) QuotaWindowHistories(authIndex, provider string, from, to time.Time) ([]QuotaWindowHistory, error) {
+	return withRepository(s, func(repo Repository) ([]QuotaWindowHistory, error) {
+		return repo.QuotaWindowHistories(authIndex, provider, from, to)
 	})
 }
 

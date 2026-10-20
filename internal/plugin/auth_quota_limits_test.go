@@ -13,12 +13,12 @@ import (
 	"cpa-key-billing/internal/billing"
 )
 
-func quotaUsageByLabel(t *testing.T, quota *authQuotaResponse) map[string]*billing.QuotaPeriodUsage {
+func quotaUsageByLabel(t *testing.T, quota *authQuotaResponse) map[string]*billing.UsageTotal {
 	t.Helper()
 	if quota == nil {
 		t.Fatal("no quota")
 	}
-	usage := make(map[string]*billing.QuotaPeriodUsage)
+	usage := make(map[string]*billing.UsageTotal)
 	for _, row := range quota.Quota {
 		usage[row.Label] = row.Usage
 	}
@@ -123,9 +123,9 @@ func TestFetchedQuotaKeysUnifiedWindowsAndCoversModelFamilies(t *testing.T) {
 	}
 	var result struct {
 		Quota []struct {
-			Label    string                    `json:"label"`
-			LimitKey string                    `json:"limit_key"`
-			Usage    *billing.QuotaPeriodUsage `json:"usage"`
+			Label    string              `json:"label"`
+			LimitKey string              `json:"limit_key"`
+			Usage    *billing.UsageTotal `json:"usage"`
 		} `json:"quota"`
 	}
 	if err := json.Unmarshal(response.Body, &result); err != nil {

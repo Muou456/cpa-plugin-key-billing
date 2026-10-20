@@ -45,7 +45,7 @@ func TestAIProviderUsageSumsNamedCredentialsInRange(t *testing.T) {
 	if len(view.Usage) != 2 {
 		t.Fatalf("usage = %+v, want only the named credentials with requests", view.Usage)
 	}
-	if got := view.Usage["config-a"]; got.Requests != 2 || got.Failed != 1 || got.InputTokens != 100 || got.OutputTokens != 20 || got.CacheReadTokens != 50 || len(got.Models) != 1 {
+	if got := view.Usage["config-a"]; got.Requests != 2 || got.Failed != 1 || got.InputTokens != 100 || got.OutputTokens != 20 || got.CacheReadTokens != 50 {
 		t.Fatalf("config-a usage = %+v", got)
 	}
 	if got := view.Usage["config-b"]; got.Requests != 1 || got.Failed != 0 {

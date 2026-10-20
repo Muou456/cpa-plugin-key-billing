@@ -271,37 +271,6 @@ function providerIcon(brand) {
   return el("span", { class: "provider-icon", "data-provider": brand, role: "img", "aria-label": PROVIDER_LABELS[brand] }, iconSVG(markup));
 }
 
-function renderModelUsageTable(models) {
-  const columns = [
-    [m("ui.requests"), (row) => tokens(row.requests, 2)],
-    [m("ui.input"), (row) => tokens(row.input_tokens)],
-    [m("ui.output"), (row) => tokens(row.output_tokens)],
-    [m("ui.cache_read"), (row) => tokens(row.cache_read_tokens)],
-    models.some((row) => row.cache_write_tokens > 0) && [m("ui.cache_write"), (row) => tokens(row.cache_write_tokens)],
-    [m("ui.cache_rate"), (row) => cacheReadRate(row.cache_read_tokens, row.input_tokens)],
-    [m("ui.cost"), (row) => usd(row.cost_usd, 2)]
-  ].filter(Boolean);
-  return el(
-    "table",
-    { class: "model-usage-table" },
-    el("thead", {}, el("tr", {}, el("th", { text: m("ui.model") }), columns.map(([label]) => el("th", { class: "num", text: label })))),
-    el(
-      "tbody",
-      {},
-      models.map((row) =>
-        el(
-          "tr",
-          {},
-          el("td", { text: row.model || m("ui.unknown_model") }),
-          columns.map(([, value]) => el("td", { class: "num", text: value(row) }))
-        )
-      )
-    )
-  );
-}
-
-function modelUsageTooltip(models) { return models?.length ? () => [renderModelUsageTable(models)] : null; }
-
 function credentialUsageSummary(usage) {
   const count = usage.requests || 0;
   const failed = usage.failed || 0;
@@ -337,8 +306,8 @@ function credentialUsageMetric(name, label, value, secondary) {
 }
 
 // The request, token and cache cells of a credential's row. Usage is recorded by auth index,
-// so a credential without one has no usage to show.
-function renderCredentialUsage(usage) {
+// so a credential without one has no usage to show. Its tokens break down by model.
+function renderCredentialUsage(usage, breakdown) {
   if (!usage) {
     return [
       credentialUsageMetric("requests", m("ui.requests"), "—"),
@@ -347,8 +316,8 @@ function renderCredentialUsage(usage) {
     ];
   }
   const { count, failed, success, total, cache } = credentialUsageSummary(usage);
-  const breakdown = modelUsageTooltip(usage.models);
-  const totalTokens = breakdown ? el("span", { class: "breakdown-value", ...hoverTooltipProps(breakdown) }, tokens(total)) : tokens(total);
+  const totalTokens =
+    breakdown && count > 0 ? el("span", { class: "breakdown-value", ...hoverTooltipProps(breakdown) }, tokens(total)) : tokens(total);
   const requests = [
     tokens(count, 2),
     " (",

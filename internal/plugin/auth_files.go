@@ -93,8 +93,10 @@ type quotaRow struct {
 	// LimitKey names the limit of a window that requests report; with the
 	// window's length it identifies the window from one report to the next.
 	LimitKey string `json:"limit_key,omitempty"`
-	// Usage is what CLIProxyAPI requests consumed in the window's current period.
-	Usage         *billing.QuotaPeriodUsage `json:"usage,omitempty"`
+	// Usage is what CLIProxyAPI requests consumed in the window's current
+	// period, which UsageQuery selects.
+	Usage         *billing.UsageTotal `json:"usage,omitempty"`
+	UsageQuery    *billing.UsageQuery `json:"usage_query,omitempty"`
 	windowSeconds int64
 	meter         *quotaMeter
 }
@@ -169,28 +171,6 @@ func (a *App) authFileHistory(req ManagementRequest, access viewAccess) Manageme
 		return viewErrorResponse(access, err)
 	}
 	return viewJSON(access, http.StatusOK, history)
-}
-
-// authFilePeriodModels breaks down by model a history period's usage, which
-// the request names by the period's usage query.
-func (a *App) authFilePeriodModels(req ManagementRequest, access viewAccess) ManagementResponse {
-	if access.APIKey && !access.Tracked {
-		return apiKeyUnauthorized()
-	}
-	selected, failure := a.resolveAuthFile(req, access)
-	if selected == nil {
-		return failure
-	}
-	period := billing.QuotaPeriod{AuthIndex: selected.AuthIndex, Provider: authCategory(selected.Type),
-		Models: billing.ModelMatch{Include: req.Query["include"], Exclude: req.Query["exclude"]}}
-	if err := timeRangeParams(req.Query, &period.Start, &period.End); err != nil {
-		return viewErrorResponse(access, err)
-	}
-	usage, err := a.store.QuotaPeriodUsage(access.usageScope(), []billing.QuotaPeriod{period}, true)
-	if err != nil {
-		return viewErrorResponse(access, err)
-	}
-	return viewJSON(access, http.StatusOK, map[string][]billing.ModelUsage{"models": append([]billing.ModelUsage{}, usage[0].Models...)})
 }
 
 // Resource routes are GET-only. Require a reset ID header and preserve it on retries.
@@ -305,14 +285,14 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 		return nil, errUsage
 	}
 	// Older reports describe no window that is still current.
-	headers, errHeaders := a.store.LatestQuotaHeaders(indexes, a.store.Now().Add(-quotaHistoryRange-quotaHistoryLookback))
-	if errHeaders != nil {
-		return nil, errHeaders
+	reports, errReports := a.store.LatestQuotaReports(indexes, a.store.Now().Add(-quotaHistoryRange-quotaHistoryLookback))
+	if errReports != nil {
+		return nil, errReports
 	}
 	quotas := make(map[quotaCredential]*authQuotaResponse)
 	for i := range views {
 		views[i].Usage = usage[views[i].AuthIndex]
-		views[i].Quota = observedAuthQuota(views[i].Category, views[i].CacheRevision, headers[views[i].AuthIndex])
+		views[i].Quota = observedAuthQuota(views[i].Category, views[i].CacheRevision, reports[views[i].AuthIndex])
 		if views[i].Quota != nil {
 			quotas[quotaCredential{views[i].AuthIndex, views[i].Category}] = views[i].Quota
 		}
@@ -876,24 +856,27 @@ func appendQuotaWindows(result *authQuotaResponse, limitKey, labelPrefix string,
 		return windows[i].order() < windows[j].order()
 	})
 	for _, window := range windows {
-		label := "5-hour limit"
-		if window.Role == "Secondary" {
-			label = "Weekly limit"
-		}
-		switch seconds := window.Seconds; {
-		case seconds == 5*60*60:
-			label = "5-hour limit"
-		case seconds == 7*24*60*60:
-			label = "Weekly limit"
-		case seconds >= 28*24*60*60 && seconds <= 31*24*60*60:
-			label = "Monthly limit"
-		case seconds > 0:
-			label = strconv.FormatInt(seconds/60, 10) + " min"
-		}
-		result.Quota = append(result.Quota, quotaRow{Label: labelPrefix + label,
-			LabelMessage: messages.Literal(label), LabelPrefix: labelPrefix, LimitKey: limitKey,
-			RemainingPercent: window.RemainingPercent, ResetAt: window.ResetAt, windowSeconds: window.Seconds, meter: window.meter})
+		result.Quota = append(result.Quota, window.row(limitKey, labelPrefix))
 	}
+}
+
+func (window quotaWindow) row(limitKey, labelPrefix string) quotaRow {
+	label := "5-hour limit"
+	if window.Role == "Secondary" {
+		label = "Weekly limit"
+	}
+	switch seconds := window.Seconds; {
+	case seconds == 5*60*60:
+		label = "5-hour limit"
+	case seconds == 7*24*60*60:
+		label = "Weekly limit"
+	case seconds >= 28*24*60*60 && seconds <= 31*24*60*60:
+		label = "Monthly limit"
+	case seconds > 0:
+		label = strconv.FormatInt(seconds/60, 10) + " min"
+	}
+	return quotaRow{Label: labelPrefix + label, LabelMessage: messages.Literal(label), LabelPrefix: labelPrefix, LimitKey: limitKey,
+		RemainingPercent: window.RemainingPercent, ResetAt: window.ResetAt, windowSeconds: window.Seconds, meter: window.meter}
 }
 
 func (window quotaWindow) order() int {

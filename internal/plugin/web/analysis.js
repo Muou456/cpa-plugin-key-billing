@@ -42,15 +42,17 @@ function loadAnalysis(account, reload) {
 function analysisRequest(account) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const filters = apiKeyFilter(account);
+  const usage = { ...selectedRange(account), ...filters };
   return {
-    params: new URLSearchParams({ ...selectedRange(account), timezone, ...filters }),
-    selection: JSON.stringify([sharedTimeRanges[account ? "account" : "admin"], filters, timezone])
+    params: new URLSearchParams({ ...usage, timezone }),
+    selection: JSON.stringify([sharedTimeRanges[account ? "account" : "admin"], filters, timezone]),
+    usage
   };
 }
 
 function readAnalysis(account, reload) {
   const role = account ? "account" : "admin";
-  const { params, selection } = analysisRequest(account);
+  const { params, selection, usage } = analysisRequest(account);
   return analysisQueries[role].read(
     selection,
     async () => {
@@ -64,6 +66,7 @@ function readAnalysis(account, reload) {
       requireObject(value.summary.cost, m("ui.cost_analysis"));
       for (const name of ["requests", "total_tokens", "total_cost", "cache_rate"])
         requireArray(value.trends[name], m("ui.analysis_trends"));
+      value.usage_query = usage;
       if (!account) {
         const distribution = requireObject(value.usage_distribution, m("ui.usage_distribution"));
         distribution.api_keys = keyDirectory.receive(requireArray(distribution.api_keys, m("ui.api_key_usage_distribution")), revision, {
@@ -235,7 +238,7 @@ function compactDistribution(rows, metric) {
   const visible = sorted.slice(0, 5).map((row) => ({ ...row }));
   const rest = sorted.slice(5);
   if (rest.length) {
-    const other = { grouped: true, label: m("ui.other") };
+    const other = { grouped: true, label: m("ui.other"), rows: rest };
     for (const field of [
       "total_tokens",
       "input_tokens",
@@ -573,9 +576,11 @@ function renderAnalysisSummary(summary, trends, daily) {
   );
 }
 
-function renderDistributionTokenTooltip(row) {
-  const metrics = [...tokenBreakdown(row), [m("ui.cache_rate"), cacheReadRate(row.cache_read_tokens, row.input_tokens)]];
-  return [el("dl", { class: "tooltip-metrics" }, metrics.flatMap(([label, value]) => [el("dt", {}, label), el("dd", {}, value)]))];
+// A row's breakdown selects the requests of the analysis that the row, or each row it groups, covers.
+function distributionUsageQuery(analysis, dimension, row) {
+  if (!(row.requests > 0)) return null;
+  const rows = row.grouped ? row.rows : [row];
+  return { ...analysis.usage_query, dimension, value: rows.map((item) => (dimension === "sources" ? item.filter : item.key)) };
 }
 
 function renderAnalysisDistribution(account, { colors = analysisColors(), animate = false } = {}) {
@@ -617,8 +622,9 @@ function renderAnalysisDistribution(account, { colors = analysisColors(), animat
       }
     })
   );
-  const list = rows.map((row, index) =>
-    el(
+  const list = rows.map((row, index) => {
+    const breakdown = modelUsageTooltip(account, distributionUsageQuery(analysis, dimension, row));
+    return el(
       "div",
       { class: "usage-distribution-row", style: "--distribution-color:" + colors[index % colors.length] },
       el(
@@ -634,18 +640,11 @@ function renderAnalysisDistribution(account, { colors = analysisColors(), animat
         "div",
         { class: "usage-distribution-metrics" },
         Object.entries(DISTRIBUTION_METRICS).map(([key, item]) =>
-          el(
-            "span",
-            {
-              class: key === metric ? "active" : "",
-              ...hoverTooltipProps(() => renderDistributionTokenTooltip(row), key === "total_tokens")
-            },
-            item.label + " " + item.format(row)
-          )
+          el("span", { class: key === metric ? "active" : "", ...hoverTooltipProps(breakdown) }, item.label + " " + item.format(row))
         )
       )
-    )
-  );
+    );
+  });
   target.querySelector(".analysis-card-header").replaceChildren(
     el("h2", {}, m("ui.usage_distribution")),
     el(

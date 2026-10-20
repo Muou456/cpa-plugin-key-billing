@@ -46,7 +46,7 @@ const (
 	routeAuthQuota              = "/auth-files/quota"
 	routeAuthQuotaReset         = "/auth-files/quota/reset"
 	routeAuthFileHistory        = "/auth-files/history"
-	routeAuthFilePeriodModels   = "/auth-files/history/models"
+	routeUsageModels            = "/usage/models"
 	routeAIProviderUsage        = "/ai-providers/usage"
 )
 
@@ -105,8 +105,8 @@ var managementEndpoints = []managementEndpoint{
 	{http.MethodGet, routeAuthFileHistory, "View 30-day auth file usage and quota periods", func(a *App, req ManagementRequest) ManagementResponse {
 		return a.authFileHistory(req, viewAccess{})
 	}},
-	{http.MethodGet, routeAuthFilePeriodModels, "View an auth file quota period's usage by model", func(a *App, req ManagementRequest) ManagementResponse {
-		return a.authFilePeriodModels(req, viewAccess{})
+	{http.MethodGet, routeUsageModels, "View usage by model", func(a *App, req ManagementRequest) ManagementResponse {
+		return a.usageModels(req, viewAccess{})
 	}},
 	{http.MethodGet, routeAIProviderUsage, "View configured AI provider credential usage", (*App).aiProviderUsage},
 }
@@ -135,7 +135,7 @@ var resourceEndpoints = []resourceEndpoint{
 	{routeAuthQuota, (*App).authQuota},
 	{routeAuthQuotaReset, (*App).authQuotaReset},
 	{routeAuthFileHistory, (*App).authFileHistory},
-	{routeAuthFilePeriodModels, (*App).authFilePeriodModels},
+	{routeUsageModels, (*App).usageModels},
 }
 
 func managementRegistration() ManagementRegistrationResponse {

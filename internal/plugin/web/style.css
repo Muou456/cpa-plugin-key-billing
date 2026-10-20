@@ -1613,8 +1613,6 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .hover-tooltip > * + * { margin-top: 6px; }
 .hover-tooltip-heading { font-size: 11px; color: var(--text-tertiary); }
 .hover-tooltip-body { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tooltip-metrics { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 24px; margin: 0; }
-.tooltip-metrics dd { margin: 0; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
 .breakdown-value {
   display: inline-block;
   cursor: help;
@@ -2015,6 +2013,7 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .model-usage-table th, .model-usage-table td { padding: 4px 8px; }
 .model-usage-table th { white-space: normal; }
 .model-usage-table td { white-space: nowrap; }
+.model-usage-table tfoot td { border-bottom: 0; color: var(--text-primary); font-weight: 600; }
 .hover-tooltip:has(.model-usage-table) { max-width: min(720px, calc(100vw - 24px)); overflow-x: auto; }
 .event-load-state {
   display: flex;

@@ -30,6 +30,8 @@ type AnalysisComposition struct {
 	Requests         int64   `json:"requests"`
 	CostUSD          float64 `json:"cost_usd"`
 	Percent          float64 `json:"percent"`
+	// Filter names a source row in usage queries without revealing it.
+	Filter string `json:"filter,omitempty"`
 }
 
 type UsageDistribution struct {

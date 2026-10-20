@@ -550,7 +550,7 @@ def auth_file_views(files, query, scope=""):
     return views
 
 
-def credential_usage(rows):
+def model_usage(rows):
     models = {}
     for row in rows:
         cost = row["cost"]
@@ -562,14 +562,15 @@ def credential_usage(rows):
         usage["cache_read_tokens"] += cost.get("cache_read_tokens", 0)
         usage["cache_write_tokens"] += cost.get("cache_write_tokens", 0)
         usage["cost_usd"] += cost.get("total_usd", 0)
+    return sorted(({"model": model, **usage} for model, usage in models.items()),
+                  key=lambda usage: (-usage["input_tokens"] - usage["output_tokens"], usage["model"]))
+
+
+def credential_usage(rows):
+    models = model_usage(rows)
     return {
         "requests": len(rows), "failed": sum(bool(row.get("failed")) for row in rows),
-        "input_tokens": sum(usage["input_tokens"] for usage in models.values()),
-        "cache_read_tokens": sum(usage["cache_read_tokens"] for usage in models.values()),
-        "output_tokens": sum(usage["output_tokens"] for usage in models.values()),
-        "cost_usd": sum(usage["cost_usd"] for usage in models.values()),
-        "models": sorted(({"model": model, **usage} for model, usage in models.items()),
-                         key=lambda usage: (-usage["input_tokens"] - usage["output_tokens"], usage["model"])),
+        **{field: sum(usage[field] for usage in models) for field in ("input_tokens", "cache_read_tokens", "output_tokens", "cost_usd")},
     }
 
 
@@ -596,16 +597,27 @@ def model_split(tokens, cost_usd, models):
 
 
 def quota_usage(tokens, cost_usd, models=CODEX_MODELS):
-    return {"usage": {"tokens": tokens, "cost_usd": cost_usd, "models": model_split(tokens, cost_usd, models)}}
+    """A window's usage lists totals; _models splits them when a breakdown is asked for."""
+    return {"usage": {"tokens": tokens, "cost_usd": cost_usd}, "_models": models}
+
+
+QUOTA_WINDOW_LENGTHS = {"5 小时限额": timedelta(hours=5), "周限额": timedelta(days=7), "月度额度": timedelta(days=30)}
 
 
 def quota_row(label, remaining_percent, reset_seconds, **extra):
-    return {
-        "label": label,
-        "remaining_percent": remaining_percent,
-        "reset_at": iso(NOW + timedelta(seconds=reset_seconds)),
-        **extra,
-    }
+    reset_at = NOW + timedelta(seconds=reset_seconds)
+    row = {"label": label, "remaining_percent": remaining_percent, "reset_at": iso(reset_at), **extra}
+    if "usage" in row:
+        row["usage_query"] = {"from": iso(reset_at - QUOTA_WINDOW_LENGTHS[label]), "to": iso(NOW)}
+    return row
+
+
+def public_fields(row, auth_file):
+    """Drops private fields; a usage query also names the auth file it selects."""
+    row = {key: value for key, value in row.items() if not key.startswith("_")}
+    if "usage_query" in row:
+        row["usage_query"] = {**row["usage_query"], "auth_index": auth_file["auth_index"], "provider": auth_file["category"]}
+    return row
 
 
 AUTH_FILE_QUOTAS = {
@@ -690,15 +702,8 @@ AUTH_FILE_QUOTAS = {
         "credit_currency": "USD",
         "quota": [
             quota_row("周限额", 78, 410400, **quota_usage(5_310_027, 6.94, ("grok-4.7", "grok-build-0.1"))),
-            {
-                "label": "月度额度",
-                "used": 8.5,
-                "limit": 50,
-                "remaining_percent": 83,
-                "currency": "USD",
-                "reset_at": iso(NOW + timedelta(seconds=1814400)),
-                **quota_usage(7_102_448, 9.12, ("grok-4.7", "grok-build-0.1")),
-            },
+            quota_row("月度额度", 83, 1814400, used=8.5, limit=50, currency="USD",
+                      **quota_usage(7_102_448, 9.12, ("grok-4.7", "grok-build-0.1"))),
         ],
     },
 }
@@ -715,7 +720,7 @@ def auth_file_quota(query):
         "fetched_at": iso(NOW),
         **quota,
     }
-    result["quota"] = localized_quota_labels(result["quota"])
+    result["quota"] = [public_fields(row, auth_file) for row in localized_quota_labels(result["quota"])]
     return result
 
 
@@ -736,7 +741,7 @@ def quota_period(start, length, used, tokens, cost_usd, plans=(), end=None, reas
     """A history period lists usage totals; _models splits them when the drawer asks for a breakdown."""
     period = {"start": iso(start), "reset_at": iso(start + length), "used_percent": used, "plans": list(plans),
               "usage": {"tokens": tokens, "cost_usd": cost_usd},
-              "usage_query": {"start": iso(start), "end": iso(min(end or start + length, NOW)), "models": {}},
+              "usage_query": {"from": iso(start), "to": iso(min(end or start + length, NOW))},
               "_models": models}
     if reason:
         period.update(end=iso(end or start + length), end_reason=reason)
@@ -811,30 +816,43 @@ AUTH_FILE_HISTORY = {
 
 def auth_file_history(query, scope=""):
     auth_index = query.get("auth_index", [""])[0]
-    if not any(item["auth_index"] == auth_index for item in AUTH_FILES):
+    auth_file = next((item for item in AUTH_FILES if item["auth_index"] == auth_index), None)
+    if auth_file is None:
         return None
     since = NOW - timedelta(days=30)
-    rows = [entry for entry in REQUEST_EVENTS if entry["auth_index"] == auth_index and (not scope or entry["scope"] == scope)
-            and datetime.fromisoformat(entry["at"].replace("Z", "+00:00")) >= since]
+    rows = [entry for entry in filter_event_time(REQUEST_EVENTS, {"from": [iso(since)], "to": [iso(NOW)]})
+            if entry["auth_index"] == auth_index and (not scope or entry["scope"] == scope)]
     windows = []
     for window in AUTH_FILE_HISTORY.get(auth_index, []):
         localized = localized_quota_labels([window])[0]
-        localized["periods"] = sorted(({key: value for key, value in period.items() if key != "_models"} for period in window["periods"]),
-                                      key=lambda period: period["start"], reverse=True)
+        localized["periods"] = sorted((public_fields(period, auth_file) for period in window["periods"]), key=lambda period: period["start"], reverse=True)
         windows.append(localized)
     return {"from": iso(since), "to": iso(NOW), "usage": credential_usage(rows), "windows": windows}
 
 
-def auth_file_period_models(query):
-    auth_index = query.get("auth_index", [""])[0]
-    if not any(item["auth_index"] == auth_index for item in AUTH_FILES):
-        return None
-    bounds = (query.get("from", [""])[0], query.get("to", [""])[0])
-    for window in AUTH_FILE_HISTORY.get(auth_index, []):
-        for period in window["periods"]:
-            if (period["usage_query"]["start"], period["usage_query"]["end"]) == bounds:
+USAGE_DIMENSIONS = {"api_keys": ("scope", ""), "models": ("billing_model", "未知模型"), "sources": ("source", "未知来源")}
+
+
+def usage_models(query, scope=""):
+    """Breaks down a credential's usage, one of its synthetic quota periods, or usage distribution rows by model."""
+    auth_index = query.get("auth_index", [None])[0]
+    if auth_index is not None:
+        bounds = (query.get("from", [""])[0], query.get("to", [""])[0])
+        periods = [*AUTH_FILE_QUOTAS.get(auth_index, {}).get("quota", []),
+                   *(period for window in AUTH_FILE_HISTORY.get(auth_index, []) for period in window["periods"])]
+        for period in periods:
+            if "usage_query" in period and (period["usage_query"]["from"], period["usage_query"]["to"]) == bounds:
                 return {"models": model_split(period["usage"]["tokens"], period["usage"]["cost_usd"], period["_models"])}
-    return {"models": []}
+        return {"models": model_usage([entry for entry in filter_event_time(REQUEST_EVENTS, query)
+                                       if entry["auth_index"] == auth_index and (not scope or entry["scope"] == scope)])}
+    field, unknown = USAGE_DIMENSIONS[query.get("dimension", ["models"])[0]]
+    values = set(query.get("value", []))
+    rows = analysis_rows(query, scope)
+    if field == "source":
+        rows = [entry for entry in rows if source_filter_token(scope, entry.get(field, "") or unknown) in values]
+    else:
+        rows = [entry for entry in rows if (entry.get(field, "") or unknown) in values]
+    return {"models": model_usage(rows)}
 
 
 KEY_PROFILES = [
@@ -1467,6 +1485,8 @@ def analysis_view(query, scope=""):
                                             "cost_usd": 0})
             if field == "scope":
                 item["preview"] = entry.get("preview", "")
+            if field == "source":
+                item["filter"] = source_filter_token(scope, key)
             cost = entry.get("cost", {})
             input_tokens = sum(cost.get(name, 0) for name in (
                 "uncached_input_tokens", "cache_read_tokens", "cache_write_tokens"))
@@ -1715,8 +1735,8 @@ def payload_for(path, query):
         return auth_file_quota(query)
     if path == f"{API_BASE}/auth-files/history":
         return auth_file_history(query)
-    if path == f"{API_BASE}/auth-files/history/models":
-        return auth_file_period_models(query)
+    if path == f"{API_BASE}/usage/models":
+        return usage_models(query)
     if path == f"{API_BASE}/ai-providers/usage":
         entries = filter_event_time(REQUEST_EVENTS, query)
         usage = {}
@@ -1791,6 +1811,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.mutation_view = None
         parsed = urlparse(self.path)
+        # Repeated parameters may be empty, as distribution rows name the unassigned key.
+        query = parse_qs(parsed.query, keep_blank_values=True)
         if parsed.path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
@@ -1841,7 +1863,7 @@ class Handler(BaseHTTPRequestHandler):
             f"{RESOURCE_BASE}/auth-files/quota",
             f"{RESOURCE_BASE}/auth-files/quota/reset",
             f"{RESOURCE_BASE}/auth-files/history",
-            f"{RESOURCE_BASE}/auth-files/history/models",
+            f"{RESOURCE_BASE}/usage/models",
         }
         if parsed.path in resource_paths:
             if not authorization.startswith("Bearer ") or authorization[7:] not in api_keys:
@@ -1859,17 +1881,16 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path.endswith("/routing"):
                 self.send_json(200, account_routing_view(index))
             elif parsed.path.endswith("/prices"):
-                self.send_json(200, model_prices(parse_qs(parsed.query), include_custom=False))
+                self.send_json(200, model_prices(query, include_custom=False))
             elif parsed.path.endswith("/analysis"):
-                self.send_json(200, analysis_view(parse_qs(parsed.query), LIVE_KEYS[index]["scope"]))
+                self.send_json(200, analysis_view(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/analysis/speed"):
-                self.send_json(200, analysis_speed_view(parse_qs(parsed.query), LIVE_KEYS[index]["scope"]))
+                self.send_json(200, analysis_speed_view(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/errors"):
-                self.send_json(200, error_view(parse_qs(parsed.query), LIVE_KEYS[index]["scope"]))
+                self.send_json(200, error_view(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/auth-files"):
-                self.send_json(200, {"files": auth_file_views(account_auth_files(index), parse_qs(parsed.query), LIVE_KEYS[index]["scope"])})
+                self.send_json(200, {"files": auth_file_views(account_auth_files(index), query, LIVE_KEYS[index]["scope"])})
             elif parsed.path.endswith("/auth-files/quota"):
-                query = parse_qs(parsed.query)
                 allowed = {
                     item["auth_index"] for item in account_auth_files(index)
                 }
@@ -1879,16 +1900,13 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(404, {"error": {"message": "认证文件不存在或不支持限额查询"}})
                 else:
                     self.send_json(200, payload)
-            elif parsed.path.endswith("/auth-files/history/models"):
-                query = parse_qs(parsed.query)
+            elif parsed.path.endswith("/usage/models"):
                 allowed = {item["auth_index"] for item in account_auth_files(index)}
-                payload = auth_file_period_models(query) if query.get("auth_index", [""])[0] in allowed else None
-                if payload is None:
+                if query.get("auth_index", [None])[0] not in allowed | {None}:
                     self.send_json(404, {"error": {"message": "认证文件不存在"}})
                 else:
-                    self.send_json(200, payload)
+                    self.send_json(200, usage_models(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/auth-files/history"):
-                query = parse_qs(parsed.query)
                 allowed = {item["auth_index"] for item in account_auth_files(index)}
                 payload = auth_file_history(query, LIVE_KEYS[index]["scope"]) if query.get("auth_index", [""])[0] in allowed else None
                 if payload is None:
@@ -1901,9 +1919,9 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.reset_auth_quota(parsed, account_auth_files(index))
             elif parsed.path.endswith("/events"):
-                self.send_json(200, request_event_view(parse_qs(parsed.query), LIVE_KEYS[index]["scope"]))
+                self.send_json(200, request_event_view(query, LIVE_KEYS[index]["scope"]))
             return
-        payload = payload_for(parsed.path, parse_qs(parsed.query))
+        payload = payload_for(parsed.path, query)
         if payload is None:
             self.send_json(404, {"error": {"message": "dummy backend: route not found"}})
             return

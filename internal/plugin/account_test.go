@@ -223,6 +223,15 @@ func TestAccountAnalysisCannotCrossScopesOrExposeScope(t *testing.T) {
 			t.Fatalf("account analysis leaked scope %q: %s", forbidden, body)
 		}
 	}
+	var breakdown struct{ Models []billing.ModelUsage }
+	response = callAccount(t, app, routeUsageModels, accountTestKeyA, url.Values{"dimension": {"models"}, "value": {"gpt-5.5"}})
+	if err := json.Unmarshal(response.Body, &breakdown); err != nil || len(breakdown.Models) != 1 || breakdown.Models[0].Requests != 1 {
+		t.Fatalf("model breakdown = %s", response.Body)
+	}
+	response = callAccount(t, app, routeUsageModels, accountTestKeyA, url.Values{"dimension": {"api_keys"}, "value": {billing.CallerScope(accountTestKeyB)}})
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("account selected another key: status = %d", response.StatusCode)
+	}
 }
 
 func TestAccountAnalysisSpeedStaysInTheCallerScope(t *testing.T) {

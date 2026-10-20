@@ -366,17 +366,28 @@ func TestRequestEventQueryUsesABoundedDefaultPage(t *testing.T) {
 
 func TestManagementAnalysisOmitsTheSelectedKeyWindow(t *testing.T) {
 	app := newConfiguredApp(t)
-	const apiKey = "sk-analysis-0000000001"
-	callOK(t, app, http.MethodPost, routeKeysSync, nil, map[string]any{"keys": []string{apiKey}}, http.StatusOK, nil)
+	const apiKey, otherKey = "sk-analysis-0000000001", "sk-analysis-0000000002"
+	callOK(t, app, http.MethodPost, routeKeysSync, nil, map[string]any{"keys": []string{apiKey, otherKey}}, http.StatusOK, nil)
 	billOneRequest(t, app, apiKey, 20)
+	billOneRequest(t, app, otherKey, 30)
 
 	var view billing.AnalysisView
-	callOK(t, app, http.MethodGet, routeAnalysis, url.Values{
-		"api_key": {billing.CallerScope(apiKey)},
-	}, nil, http.StatusOK, &view)
+	selected := url.Values{"api_key": {billing.CallerScope(apiKey)}}
+	callOK(t, app, http.MethodGet, routeAnalysis, selected, nil, http.StatusOK, &view)
 	if len(view.UsageDistribution.APIKeys) != 0 || len(view.UsageDistribution.Models) != 1 ||
 		view.UsageDistribution.Models[0].Requests != 1 {
 		t.Fatalf("analysis = %+v", view)
+	}
+	// A row's breakdown stays within the selected key, whose window has no key rows.
+	var breakdown struct{ Models []billing.ModelUsage }
+	callOK(t, app, http.MethodGet, routeUsageModels, url.Values{"api_key": selected["api_key"], "dimension": {"sources"},
+		"value": {view.UsageDistribution.Sources[0].Filter}}, nil, http.StatusOK, &breakdown)
+	if len(breakdown.Models) != 1 || breakdown.Models[0].Requests != 1 {
+		t.Fatalf("source breakdown = %+v", breakdown)
+	}
+	if response := callManagement(t, app, http.MethodGet, routeUsageModels, url.Values{"api_key": selected["api_key"],
+		"dimension": {"api_keys"}, "value": {billing.CallerScope(otherKey)}}, nil); response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("key rows under a selected key: status = %d", response.StatusCode)
 	}
 	response := callManagement(t, app, http.MethodGet, routeAnalysis, url.Values{
 		"from": {"2026-09-01T02:00:00Z"}, "to": {"2026-09-01T01:00:00Z"},

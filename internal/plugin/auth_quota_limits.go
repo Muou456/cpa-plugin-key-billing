@@ -47,6 +47,29 @@ func codexAdditionalLimit(name string) codexLimit {
 	return limit
 }
 
+// codexLimitByKey is the limit a window's key names.
+func codexLimitByKey(key string) codexLimit {
+	switch unnamed := codexAdditionalLimit(""); key {
+	case codexMainLimit.key:
+		return codexMainLimit
+	case codexCodeReviewLimit.key:
+		return codexCodeReviewLimit
+	case unnamed.key:
+		return unnamed
+	}
+	return codexAdditionalLimit(key)
+}
+
+// reportedLimit gives the label prefix and meter of a window that responses
+// report, by its limit's key. Claude reports only its unified limit.
+func reportedLimit(provider, key string) (string, *quotaMeter) {
+	if provider == "claude" {
+		return "", &quotaMeter{}
+	}
+	limit := codexLimitByKey(key)
+	return limit.labelPrefix, limit.meter()
+}
+
 func (limit codexLimit) meter() *quotaMeter {
 	switch {
 	case limit == codexMainLimit:
@@ -91,8 +114,7 @@ type quotaCredential struct {
 	authIndex, provider string
 }
 
-// quotaWindowHistory is a metered window as the newest report on a
-// credential's requests describes it, with the periods all reports divide it into.
+// quotaWindowHistory is a metered window with the periods its reports divide it into.
 type quotaWindowHistory struct {
 	row     quotaRow
 	periods []billing.QuotaWindowPeriod
@@ -103,35 +125,25 @@ type quotaWindowHistory struct {
 // A response reports only the windows of the limit it used, so a window it
 // leaves out is unchanged rather than gone.
 func (a *App) quotaWindowHistories(credential quotaCredential, from, now time.Time) ([]quotaWindowHistory, error) {
-	observations, err := a.store.QuotaHeaderHistory(credential.authIndex, from, now)
+	windows, err := a.store.QuotaWindowHistories(credential.authIndex, credential.provider, from, now)
 	if err != nil {
 		return nil, err
 	}
 	var histories []quotaWindowHistory
-	var reports [][]billing.QuotaWindowReport
-	for _, observation := range observations {
-		if !strings.EqualFold(observation.Provider, credential.provider) {
+	for _, window := range windows {
+		labelPrefix, meter := reportedLimit(credential.provider, window.LimitKey)
+		if meter == nil {
 			continue
 		}
-		quota := parseQuotaHeaders(observation.Provider, observation.Headers, observation.At).quota(observation.At)
-		for _, row := range quota.Quota {
-			if row.meter == nil {
-				continue
-			}
-			index := slices.IndexFunc(histories, func(history quotaWindowHistory) bool { return history.row.sameWindow(row) })
-			if index < 0 {
-				index = len(histories)
-				histories, reports = append(histories, quotaWindowHistory{}), append(reports, nil)
-			}
-			histories[index].row = row
-			report := billing.QuotaWindowReport{At: observation.At, UsedPercent: 100 - *row.RemainingPercent, Plan: quota.Plan}
-			report.ResetAt, _ = time.Parse(time.RFC3339, row.ResetAt)
-			reports[index] = append(reports[index], report)
+		reports := make([]billing.QuotaWindowReport, len(window.Reports))
+		for i, report := range window.Reports {
+			report.UsedPercent = min(report.UsedPercent, 100)
+			report.Plan = codexPlanLabel(report.Plan)
+			reports[i] = report
 		}
-	}
-	for i := range histories {
-		length := time.Duration(histories[i].row.windowSeconds) * time.Second
-		histories[i].periods = billing.QuotaWindowPeriods(length, reports[i], now)
+		row := quotaWindow{Seconds: window.Seconds, meter: meter}.row(window.LimitKey, labelPrefix)
+		length := time.Duration(window.Seconds) * time.Second
+		histories = append(histories, quotaWindowHistory{row: row, periods: billing.QuotaWindowPeriods(length, reports, now)})
 	}
 	slices.SortFunc(histories, func(left, right quotaWindowHistory) int { return compareQuotaWindows(left.row, right.row) })
 	return histories, nil
@@ -196,9 +208,9 @@ func (row quotaRow) currentPeriod(histories []quotaWindowHistory) (billing.Quota
 	return billing.QuotaWindowPeriod{Start: resetAt.Add(-time.Duration(row.windowSeconds) * time.Second), ResetAt: resetAt}, true
 }
 
-// usagePeriod selects the requests a period of the row's window covers,
+// usageQuery selects the requests a period of the row's window covers,
 // through now or the period's end.
-func (row quotaRow) usagePeriod(credential quotaCredential, period billing.QuotaWindowPeriod, now time.Time, exclusive []string) billing.QuotaPeriod {
+func (row quotaRow) usageQuery(credential quotaCredential, period billing.QuotaWindowPeriod, now time.Time, exclusive []string) billing.UsageQuery {
 	end := period.End
 	if end.IsZero() {
 		end = now
@@ -210,7 +222,7 @@ func (row quotaRow) usagePeriod(credential quotaCredential, period billing.Quota
 	if len(models.Include) == 0 {
 		models.Exclude = exclusive
 	}
-	return billing.QuotaPeriod{AuthIndex: credential.authIndex, Provider: credential.provider, Start: period.Start, End: end, Models: models}
+	return billing.UsageQuery{From: period.Start, To: end, AuthIndex: credential.authIndex, Provider: credential.provider, ModelMatch: models}
 }
 
 func exclusiveModels(rows []quotaRow) []string {
@@ -227,7 +239,7 @@ func exclusiveModels(rows []quotaRow) []string {
 // current period. A scope limits usage to one API key.
 func (a *App) attachQuotaUsage(scope string, quotas map[quotaCredential]*authQuotaResponse) error {
 	now := a.store.Now()
-	var periods []billing.QuotaPeriod
+	var queries []billing.UsageQuery
 	var rows []*quotaRow
 	for credential, quota := range quotas {
 		// The windows that requests report take their current periods from history.
@@ -249,20 +261,20 @@ func (a *App) attachQuotaUsage(scope string, quotas map[quotaCredential]*authQuo
 		exclusive := exclusiveModels(quota.Quota)
 		for i := range quota.Quota {
 			if period, ok := quota.Quota[i].currentPeriod(histories); ok {
-				periods = append(periods, quota.Quota[i].usagePeriod(credential, period, now, exclusive))
+				queries = append(queries, quota.Quota[i].usageQuery(credential, period, now, exclusive))
 				rows = append(rows, &quota.Quota[i])
 			}
 		}
 	}
-	if len(periods) == 0 {
+	if len(queries) == 0 {
 		return nil
 	}
-	usage, err := a.store.QuotaPeriodUsage(scope, periods, true)
+	usage, err := a.store.UsageTotals(scope, queries)
 	if err != nil {
 		return err
 	}
 	for i := range usage {
-		rows[i].Usage = &usage[i]
+		rows[i].Usage, rows[i].UsageQuery = &usage[i], &queries[i]
 	}
 	return nil
 }
@@ -285,14 +297,14 @@ type quotaWindowView struct {
 // quotaPeriodView lists its usage as totals; UsageQuery breaks it down by
 // model on request.
 type quotaPeriodView struct {
-	Start       time.Time                `json:"start"`
-	End         time.Time                `json:"end,omitzero"`
-	ResetAt     time.Time                `json:"reset_at,omitzero"`
-	EndReason   billing.QuotaPeriodEnd   `json:"end_reason,omitempty"`
-	UsedPercent float64                  `json:"used_percent"`
-	Plans       []string                 `json:"plans,omitempty"`
-	Usage       billing.QuotaPeriodUsage `json:"usage"`
-	UsageQuery  billing.QuotaPeriod      `json:"usage_query"`
+	Start       time.Time              `json:"start"`
+	End         time.Time              `json:"end,omitzero"`
+	ResetAt     time.Time              `json:"reset_at,omitzero"`
+	EndReason   billing.QuotaPeriodEnd `json:"end_reason,omitempty"`
+	UsedPercent float64                `json:"used_percent"`
+	Plans       []string               `json:"plans,omitempty"`
+	Usage       billing.UsageTotal     `json:"usage"`
+	UsageQuery  billing.UsageQuery     `json:"usage_query"`
 }
 
 // readAuthFileHistory lists an auth file's usage over the last 30 days and the
@@ -315,7 +327,7 @@ func (a *App) readAuthFileHistory(credential quotaCredential, scope string) (aut
 		rows[i] = history.row
 	}
 	exclusive := exclusiveModels(rows)
-	var periods []billing.QuotaPeriod
+	var queries []billing.UsageQuery
 	for _, history := range histories {
 		window := quotaWindowView{Label: history.row.Label, LabelMessage: history.row.LabelMessage, LabelPrefix: history.row.LabelPrefix}
 		for i := len(history.periods) - 1; i >= 0; i-- {
@@ -323,16 +335,16 @@ func (a *App) readAuthFileHistory(credential quotaCredential, scope string) (aut
 			if !period.EndsAfter(response.From) {
 				break
 			}
-			query := history.row.usagePeriod(credential, period, now, exclusive)
+			query := history.row.usageQuery(credential, period, now, exclusive)
 			window.Periods = append(window.Periods, quotaPeriodView{Start: period.Start, End: period.End, ResetAt: period.ResetAt,
 				EndReason: period.EndReason, UsedPercent: period.UsedPercent, Plans: period.Plans, UsageQuery: query})
-			periods = append(periods, query)
+			queries = append(queries, query)
 		}
 		if len(window.Periods) > 0 {
 			response.Windows = append(response.Windows, window)
 		}
 	}
-	usage, err := a.store.QuotaPeriodUsage(scope, periods, false)
+	usage, err := a.store.UsageTotals(scope, queries)
 	if err != nil {
 		return response, err
 	}

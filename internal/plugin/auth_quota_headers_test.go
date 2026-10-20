@@ -99,23 +99,24 @@ func TestQuotaHeadersAcceptOnlyProviderQuotaFields(t *testing.T) {
 			"anthropic-ratelimit-unified-7d-utilization": {"NaN"},
 			"x-ratelimit-remaining-tokens":               {"1000"},
 		}}
-	filtered := usageQuotaHeaders(claude, at)
-	decoded := parseQuotaHeaders("claude", filtered, at).quota(at)
-	if len(filtered) != 2 || len(decoded.Quota) != 1 || *decoded.Quota[0].RemainingPercent != 77 {
-		t.Fatalf("Claude quota: %+v, headers: %v", decoded, filtered)
+	report := usageQuotaReport(claude, at)
+	if report == nil || len(report.Windows) != 1 || report.Windows[0].ResetAt.Unix() != 1800000000 {
+		t.Fatalf("Claude report: %+v", report)
+	}
+	if decoded := reportQuota(*report, at); len(decoded.Quota) != 1 || *decoded.Quota[0].RemainingPercent != 77 {
+		t.Fatalf("Claude quota: %+v", decoded)
 	}
 	claude.AuthType = "apikey"
-	if len(usageQuotaHeaders(claude, at)) != 0 {
+	if usageQuotaReport(claude, at) != nil {
 		t.Fatal("accepted API key credential")
 	}
-	sample := parseQuotaHeaders("codex", http.Header{
+	report = quotaHeaderReport("codex", http.Header{
 		"X-Codex-Active-Limit":         {"codex_spark"},
 		"X-Codex-Primary-Used-Percent": {"90"}, "X-Codex-Primary-Window-Minutes": {"300"},
 		"X-Codex-Spark-Limit-Name":           {"Spark"},
 		"X-Codex-Spark-Primary-Used-Percent": {"20"}, "X-Codex-Spark-Primary-Window-Minutes": {"300"},
 	}, at)
-	decoded, filtered = sample.quota(at), sample.headers()
-	if len(decoded.Quota) != 1 || decoded.Quota[0].LabelPrefix != "Spark " || filtered.Get("X-Codex-Primary-Used-Percent") != "" {
+	if decoded := reportQuota(*report, at); len(report.Windows) != 1 || len(decoded.Quota) != 1 || decoded.Quota[0].LabelPrefix != "Spark " {
 		t.Fatalf("additional quota presented as main quota: %+v", decoded)
 	}
 }
@@ -131,12 +132,12 @@ func TestCodexQuotaPreservesAdditionalWindowsAndPartialCredits(t *testing.T) {
 			"X-Codex-Code-Review-Primary-Window-Minutes":                    {"10080"},
 			"X-Codex-Credits-Balance":                                       {"126.4"}, "X-Codex-Credits-Unlimited": {"true"},
 		}}
-	first := usageQuotaHeaders(record, at)
+	first := usageQuotaReport(record, at)
 	record.RequestedAt = at.Add(time.Minute)
 	record.ResponseHeaders = http.Header{"X-Codex-Credits-Unlimited": {"false"}}
-	quota := observedAuthQuota("codex", "dummy", []billing.QuotaHeaderObservation{
-		{Provider: "codex", At: at, Headers: first},
-		{Provider: "codex", At: record.RequestedAt, Headers: usageQuotaHeaders(record, at)},
+	quota := observedAuthQuota("codex", "dummy", []billing.QuotaObservation{
+		{At: at, QuotaReport: *first},
+		{At: record.RequestedAt, QuotaReport: *usageQuotaReport(record, at)},
 	})
 	if quota == nil || len(quota.Quota) != 2 || quota.CreditBalance != "126.4" || quota.CreditsUnlimited ||
 		!quota.CreditBalanceObservedAt.Equal(at) || !quota.CreditsUnlimitedObservedAt.Equal(record.RequestedAt) {
@@ -177,16 +178,17 @@ func TestCodexQuotaHeadersAttributeWindowsByTheirLimit(t *testing.T) {
 		{"Spark", additional("GPT-5.3-Codex-Spark"), "GPT-5.3-Codex-Spark 5-hour limit*"},
 		{"additional limit of unknown models", additional("Fancy Feature"), "Fancy Feature 5-hour limit"},
 	} {
-		sample := parseQuotaHeaders("codex", test.headers, at)
 		var labels []string
-		for _, row := range parseQuotaHeaders("codex", sample.headers(), at).quota(at).Quota {
-			if row.meter != nil {
-				row.Label += "*"
+		if report := quotaHeaderReport("codex", test.headers, at); report != nil {
+			for _, row := range reportQuota(*report, at).Quota {
+				if row.meter != nil {
+					row.Label += "*"
+				}
+				labels = append(labels, row.Label)
 			}
-			labels = append(labels, row.Label)
 		}
-		if strings.Join(labels, ",") != test.want || sample.headers().Get("X-Codex-Active-Limit") != test.headers.Get("X-Codex-Active-Limit") {
-			t.Errorf("%s: windows %v, stored %v", test.name, labels, sample.headers())
+		if strings.Join(labels, ",") != test.want {
+			t.Errorf("%s: windows %v", test.name, labels)
 		}
 	}
 }

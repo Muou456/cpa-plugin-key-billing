@@ -179,10 +179,21 @@ func TestAuthFilesStatisticsFollowTimeRangeAndAccountScope(t *testing.T) {
 				t.Fatalf("response=%s, want=%+v", response.Body, tc.want)
 			}
 			got := view.Files[0].Usage
+			// Every request used gpt-5.5, so the breakdown of the same requests repeats the totals.
+			breakdown := url.Values{"auth_index": {view.Files[0].AuthIndex}, "from": tc.query["from"], "to": tc.query["to"]}
+			if tc.key != "" {
+				response = callAccount(t, app, routeUsageModels, tc.key, breakdown)
+			} else {
+				response = callManagement(t, app, http.MethodGet, routeUsageModels, breakdown, nil)
+			}
+			var models struct{ Models []billing.ModelUsage }
+			wantModels := 0
 			if tc.want.Requests > 0 {
-				// Every request used gpt-5.5, so its row repeats the totals.
-				tc.want.Models = []billing.ModelUsage{{Model: "gpt-5.5", Requests: tc.want.Requests, InputTokens: tc.want.InputTokens,
-					OutputTokens: tc.want.OutputTokens, CacheReadTokens: tc.want.CacheReadTokens, CostUSD: got.CostUSD}}
+				wantModels = 1
+			}
+			if err := json.Unmarshal(response.Body, &models); err != nil || len(models.Models) != wantModels ||
+				wantModels == 1 && (models.Models[0].Requests != tc.want.Requests || models.Models[0].InputTokens != tc.want.InputTokens) {
+				t.Fatalf("breakdown=%s, want=%+v", response.Body, tc.want)
 			}
 			assertCostClose(t, got.CostUSD, tc.want.CostUSD)
 			got.CostUSD = tc.want.CostUSD

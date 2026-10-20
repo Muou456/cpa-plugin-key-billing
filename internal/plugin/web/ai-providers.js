@@ -161,8 +161,8 @@ async function fetchAIProviders() {
   const providers = lists.flat();
   const indexes = [...new Set(providers.map((provider) => provider.auth_index).filter(Boolean))];
   const usage = {};
+  const range = selectedRange(false);
   if (indexes.length) {
-    const range = selectedRange(false);
     await Promise.all(
       batchedSearchParams("auth_index", indexes).map(async (query) => {
         for (const [name, value] of Object.entries(range)) query.set(name, value);
@@ -170,7 +170,12 @@ async function fetchAIProviders() {
       })
     );
   }
-  return providers.map((provider) => ({ ...provider, usage: provider.auth_index ? usage[provider.auth_index] || {} : null }));
+  // A breakdown selects the same requests as its total.
+  return providers.map((provider) =>
+    provider.auth_index
+      ? { ...provider, usage: usage[provider.auth_index] || {}, usage_query: { auth_index: provider.auth_index, ...range } }
+      : { ...provider, usage: null }
+  );
 }
 
 function readAIProviders(reload = false) { return aiProvidersQuery.read(JSON.stringify(sharedTimeRanges.admin), fetchAIProviders, reload); }
@@ -494,7 +499,7 @@ function renderAIProviderRow(provider) {
         )
       )
     ),
-    renderCredentialUsage(provider.usage),
+    renderCredentialUsage(provider.usage, modelUsageTooltip(false, provider.usage_query)),
     el("td", { class: "credential-quota-cell" }, renderAIBalance(provider)),
     el(
       "td",

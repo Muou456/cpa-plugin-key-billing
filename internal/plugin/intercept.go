@@ -301,7 +301,7 @@ func (a *App) handleUsage(raw []byte) ([]byte, error) {
 		Provider:            record.Provider,
 		ExecutorType:        record.ExecutorType,
 		AuthType:            record.AuthType,
-		QuotaHeaders:        usageQuotaHeaders(record, at),
+		Quota:               usageQuotaReport(record, at),
 		Account:             record.Source,
 		ReasoningEffort:     record.ReasoningEffort,
 		ServiceTier:         record.ServiceTier,

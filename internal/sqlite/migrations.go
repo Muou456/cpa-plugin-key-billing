@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
 	"cpa-key-billing/internal/billing"
 )
 
-func migrateSchema(tx *sql.Tx, version int) error {
+func migrateSchema(tx *sql.Tx, version int, storedHeaders StoredQuotaHeaders) error {
 	var steps []func(*sql.Tx) error
 	switch version {
 	case 10:
@@ -37,11 +38,81 @@ func migrateSchema(tx *sql.Tx, version int) error {
 	if version <= 17 {
 		steps = append(steps, migrateRequestInfo)
 	}
-	steps = append(steps, migrateExecutionMetadata)
+	if version <= 18 {
+		steps = append(steps, migrateExecutionMetadata)
+	}
+	steps = append(steps, func(tx *sql.Tx) error { return migrateQuotaReports(tx, storedHeaders) })
 	for _, step := range steps {
 		if err := step(tx); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Schema 20 moves the quota headers stored with each request into the reports
+// they make, which are read without decoding headers. Headers that report
+// nothing under the current rules leave no report.
+func migrateQuotaReports(tx *sql.Tx, storedHeaders StoredQuotaHeaders) error {
+	if _, err := tx.Exec(quotaReportTables); err != nil {
+		return fmt.Errorf("Create quota report tables: %w", err)
+	}
+	rows, err := tx.Query(`SELECT id, auth_index, provider, at, response_headers_json FROM request_events
+		WHERE response_headers_json != '{}' ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("Read stored quota headers: %w", err)
+	}
+	type stored struct {
+		id        int64
+		authIndex string
+		at        time.Time
+		report    *billing.QuotaReport
+	}
+	var reports []stored
+	for rows.Next() {
+		if storedHeaders == nil {
+			rows.Close()
+			return fmt.Errorf("Converting stored quota headers needs a header reader")
+		}
+		var row stored
+		var provider, raw string
+		var at int64
+		if err := rows.Scan(&row.id, &row.authIndex, &provider, &at, &raw); err != nil {
+			rows.Close()
+			return fmt.Errorf("Read stored quota headers: %w", err)
+		}
+		var values map[string]any
+		if err := json.Unmarshal([]byte(raw), &values); err != nil {
+			rows.Close()
+			return fmt.Errorf("Request event %d has invalid stored quota headers: %w", row.id, err)
+		}
+		// Headers are stored as value lists; read plain text values the same way.
+		headers := make(http.Header, len(values))
+		for key, value := range values {
+			if list, ok := value.([]any); ok && len(list) > 0 {
+				value = list[0]
+			}
+			if text, ok := value.(string); ok {
+				headers[key] = []string{text}
+			}
+		}
+		row.at = timeAt(at)
+		if row.report = storedHeaders(provider, headers, row.at); row.report != nil {
+			reports = append(reports, row)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return fmt.Errorf("Read stored quota headers: %w", err)
+	}
+	for _, row := range reports {
+		if err := insertQuotaReport(tx, row.id, row.authIndex, row.at, *row.report); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("ALTER TABLE request_events DROP COLUMN response_headers_json"); err != nil {
+		return fmt.Errorf("Drop stored quota headers: %w", err)
 	}
 	return nil
 }

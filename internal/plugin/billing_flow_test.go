@@ -310,7 +310,7 @@ func TestUsageHandlePersistsBillWithoutPlaintextKeys(t *testing.T) {
 	}
 	app.Shutdown()
 
-	database, errOpen := sqlite.Open(statePath)
+	database, errOpen := sqlite.Open(statePath, nil)
 	if errOpen != nil {
 		t.Fatalf("reopen persisted state: %v", errOpen)
 	}

@@ -18,7 +18,7 @@ func openTestDB(t *testing.T) *DB {
 
 func openDatabase(t *testing.T, path string) *DB {
 	t.Helper()
-	database, err := Open(path)
+	database, err := Open(path, nil)
 	if err != nil {
 		t.Fatalf("Open error = %v", err)
 	}
@@ -157,6 +157,7 @@ func TestFreshSchemaVersionAndTables(t *testing.T) {
 		"api_keys": true, "routes": true, "plans": true,
 		"prices": true, "request_events": true, "config_credentials": true,
 		"request_errors": true, "plugin_logs": true, "reference_prices_metadata": true, "reference_prices": true,
+		"quota_reports": true, "quota_report_windows": true,
 	}
 	rows, err := database.db.Query(`SELECT name FROM sqlite_master
 		WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
@@ -190,7 +191,7 @@ func TestOpenRejectsExistingSchemas(t *testing.T) {
 			if err := database.Close(); err != nil {
 				t.Fatal(err)
 			}
-			if reopened, err := Open(path); err == nil {
+			if reopened, err := Open(path, nil); err == nil {
 				_ = reopened.Close()
 				t.Fatal("Open accepted an existing schema")
 			} else if !strings.Contains(err.Error(), "unsupported format") {
@@ -246,7 +247,7 @@ func TestQuotaConfigurationExtendsExistingJSON(t *testing.T) {
 }
 
 func BenchmarkHistoryQueries(b *testing.B) {
-	d, err := Open(filepath.Join(b.TempDir(), "history.db"))
+	d, err := Open(filepath.Join(b.TempDir(), "history.db"), nil)
 	if err != nil {
 		b.Fatal(err)
 	}

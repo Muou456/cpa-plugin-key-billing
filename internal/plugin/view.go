@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -246,6 +247,9 @@ func (a *App) analysis(req ManagementRequest, access viewAccess) ManagementRespo
 	if access.APIKey || query.KeyScope != "" || query.KeyScopeEmpty {
 		view.UsageDistribution.APIKeys = []billing.AnalysisComposition{}
 	}
+	for i := range view.UsageDistribution.Sources {
+		view.UsageDistribution.Sources[i].Filter = sourceFilterToken(access.Scope, view.UsageDistribution.Sources[i].Key)
+	}
 	return viewJSON(access, http.StatusOK, view)
 }
 
@@ -265,6 +269,66 @@ func (a *App) analysisSpeed(req ManagementRequest, access viewAccess) Management
 		return viewErrorResponse(access, err)
 	}
 	return viewJSON(access, http.StatusOK, view)
+}
+
+// usageModels breaks down by model the usage of the requests a query selects:
+// a credential's, in a quota period when the query names one, or those of rows
+// of the usage distribution, which a dimension and its values name. Source rows
+// are named by their filters.
+func (a *App) usageModels(req ManagementRequest, access viewAccess) ManagementResponse {
+	if access.APIKey && !access.Tracked {
+		return apiKeyUnauthorized()
+	}
+	query := billing.UsageQuery{AuthIndex: strings.TrimSpace(req.Query.Get("auth_index")), Provider: strings.TrimSpace(req.Query.Get("provider")),
+		ModelMatch: billing.ModelMatch{Include: req.Query["include"], Exclude: req.Query["exclude"]}}
+	if err := timeRangeParams(req.Query, &query.From, &query.To); err != nil {
+		return viewErrorResponse(access, err)
+	}
+	if req.Query.Has("auth_index") {
+		// An API key sees only the auth files its routing allows.
+		if access.APIKey {
+			if selected, failure := a.resolveAuthFile(req, access); selected == nil {
+				return failure
+			}
+		} else if query.AuthIndex == "" || len(query.AuthIndex) > 512 {
+			return viewJSONError(access, http.StatusBadRequest, "invalid", "Invalid auth file identifier")
+		}
+	}
+	if !access.APIKey {
+		if key, empty := keyScopeFilter(req.Query); key != "" || empty {
+			query.KeyScopes = []string{key}
+		}
+	}
+	scope, values := access.usageScope(), req.Query["value"]
+	switch dimension := req.Query.Get("dimension"); {
+	case dimension == "":
+	case len(values) == 0:
+		return viewJSONError(access, http.StatusBadRequest, "invalid", "Name the usage distribution rows")
+	case dimension == "api_keys" && !access.APIKey && query.KeyScopes == nil:
+		query.KeyScopes = values
+	case dimension == "models":
+		query.Models = values
+	case dimension == "sources":
+		sources, err := a.store.UsageSources(scope, query)
+		if err != nil {
+			return viewErrorResponse(access, err)
+		}
+		for _, source := range sources {
+			if slices.Contains(values, sourceFilterToken(access.Scope, source)) {
+				query.Sources = append(query.Sources, source)
+			}
+		}
+		if query.Sources == nil {
+			return viewJSONError(access, http.StatusBadRequest, "expired_filter", "Source filter expired; refresh the page")
+		}
+	default:
+		return viewJSONError(access, http.StatusBadRequest, "invalid", "Invalid usage distribution dimension")
+	}
+	models, err := a.store.UsageByModel(scope, query)
+	if err != nil {
+		return viewErrorResponse(access, err)
+	}
+	return viewJSON(access, http.StatusOK, map[string][]billing.ModelUsage{"models": models})
 }
 
 func analysisQuery(req ManagementRequest, access viewAccess) (billing.RequestEventQuery, error) {

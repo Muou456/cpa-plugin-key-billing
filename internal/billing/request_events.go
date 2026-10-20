@@ -1,9 +1,6 @@
 package billing
 
-import (
-	"net/http"
-	"time"
-)
+import "time"
 
 // ExecutionMetadata contains host-reported execution identity. CredentialRef is
 // a plugin fingerprint, and BaseURL omits user info, query strings and fragments.
@@ -47,8 +44,8 @@ type RequestEvent struct {
 	PriceSource PriceSource `json:"price_source,omitempty"`
 	Cost        Cost        `json:"cost"`
 	// ReasoningTokens is already included in Cost.BilledOutputTokens.
-	ReasoningTokens int64       `json:"reasoning_tokens,omitempty"`
-	QuotaHeaders    http.Header `json:"-"`
+	ReasoningTokens int64        `json:"reasoning_tokens,omitempty"`
+	Quota           *QuotaReport `json:"-"`
 }
 
 const RequestEventRetention = 365 * 24 * time.Hour

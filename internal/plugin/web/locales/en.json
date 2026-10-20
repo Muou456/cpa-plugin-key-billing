@@ -205,6 +205,7 @@
   "ui.cache_read": "Cache read",
   "ui.cache_write": "Cache write",
   "ui.no_price_configured_currently_unavailable": "No pricing available; requests are blocked",
+  "ui.total": "Total",
   "ui.total_tokens": "Total tokens",
   "ui.token_share": "Token share",
   "ui.requests_4": "Requests",

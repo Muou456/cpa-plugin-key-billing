@@ -295,6 +295,7 @@ function resetRoleData(role) {
   analysisQueries[role].clear();
   speedQueries[role].clear();
   authFilesQueries[role].clear();
+  modelUsages[role].clear();
   if (!account) {
     aiProvidersQuery.clear();
     eventKeysQuery.clear();

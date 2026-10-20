@@ -17,6 +17,14 @@ var indexes = map[string][]index{
 			"uncached_input_tokens, cache_read_tokens, cache_write_tokens, billed_output_tokens, total_usd"},
 		{"model_at", eventModelSQL + ", at"},
 	},
+	"quota_reports": {
+		// Covers the newest values and the history of a credential's reports.
+		{"auth", "auth_index, provider, at, request_event_id, plan, credit_balance, credits_unlimited"},
+	},
+	"quota_report_windows": {
+		// Covers each window's reports in order, and so its newest one.
+		{"window", "auth_index, provider, limit_key, seconds, at, request_event_id, used_percent, reset_at, plan"},
+	},
 	"request_errors": {
 		{"status", "status_code, error_type"},
 		{"type", "error_type, status_code"},
@@ -27,6 +35,34 @@ var indexes = map[string][]index{
 		{"level_id_at", "level, id, at"},
 	},
 }
+
+// quotaReportTables hold what each request's response reported about its
+// credential's quota. A window copies its report's credential, time and plan so
+// that each window's reports are an index range.
+const quotaReportTables = `
+CREATE TABLE quota_reports (
+	request_event_id  INTEGER PRIMARY KEY REFERENCES request_events(id) ON DELETE CASCADE,
+	auth_index        TEXT    NOT NULL,
+	provider          TEXT    NOT NULL,
+	at                INTEGER NOT NULL,
+	plan              TEXT    NOT NULL DEFAULT '',
+	credit_balance    TEXT    NOT NULL DEFAULT '',
+	credits_unlimited INTEGER
+);
+
+CREATE TABLE quota_report_windows (
+	request_event_id INTEGER NOT NULL REFERENCES quota_reports(request_event_id) ON DELETE CASCADE,
+	limit_key        TEXT    NOT NULL,
+	seconds          INTEGER NOT NULL,
+	auth_index       TEXT    NOT NULL,
+	provider         TEXT    NOT NULL,
+	at               INTEGER NOT NULL,
+	plan             TEXT    NOT NULL DEFAULT '',
+	used_percent     REAL    NOT NULL,
+	reset_at         INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (request_event_id, limit_key, seconds)
+) WITHOUT ROWID;
+`
 
 // Time columns use Unix nanoseconds; JSON cycles use UTC RFC3339Nano.
 const schema = `
@@ -135,7 +171,6 @@ CREATE TABLE request_events (
 	applied_output_per_1m       REAL    NOT NULL DEFAULT 0,
 	applied_cache_read_per_1m   REAL    NOT NULL DEFAULT 0,
 	applied_cache_write_per_1m  REAL    NOT NULL DEFAULT 0,
-	response_headers_json       TEXT    NOT NULL DEFAULT '{}',
 	endpoint                    TEXT    NOT NULL DEFAULT '',
 	transport                   TEXT    NOT NULL DEFAULT '',
 	stream                      INTEGER,
@@ -149,6 +184,7 @@ CREATE TABLE request_errors (
 	body             TEXT    NOT NULL DEFAULT ''
 );
 
+` + quotaReportTables + `
 CREATE TABLE plugin_logs (
 	id      INTEGER PRIMARY KEY AUTOINCREMENT,
 	at      INTEGER NOT NULL,

@@ -22,16 +22,24 @@ func (r *memoryRepository) CredentialUsageStats([]string, string, time.Time, tim
 	return map[string]CredentialUsageStats{}, r.fail
 }
 
-func (r *memoryRepository) LatestQuotaHeaders([]string, time.Time) (map[string][]QuotaHeaderObservation, error) {
-	return map[string][]QuotaHeaderObservation{}, r.fail
+func (r *memoryRepository) LatestQuotaReports([]string, time.Time) (map[string][]QuotaObservation, error) {
+	return map[string][]QuotaObservation{}, r.fail
 }
 
-func (r *memoryRepository) QuotaHeaderHistory(string, time.Time, time.Time) ([]QuotaHeaderObservation, error) {
+func (r *memoryRepository) QuotaWindowHistories(string, string, time.Time, time.Time) ([]QuotaWindowHistory, error) {
 	return nil, r.fail
 }
 
-func (r *memoryRepository) QuotaPeriodUsage(period QuotaPeriod, scope string, byModel bool) (QuotaPeriodUsage, error) {
-	return QuotaPeriodUsage{}, r.fail
+func (r *memoryRepository) UsageTotal(string, UsageQuery) (UsageTotal, error) {
+	return UsageTotal{}, r.fail
+}
+
+func (r *memoryRepository) UsageByModel(string, UsageQuery) ([]ModelUsage, error) {
+	return nil, r.fail
+}
+
+func (r *memoryRepository) UsageSources(string, UsageQuery) ([]string, error) {
+	return nil, r.fail
 }
 
 func (r *memoryRepository) Load(requestCutoff, pluginCutoff time.Time) (Snapshot, error) {

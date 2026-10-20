@@ -37,7 +37,7 @@ func TestV12PriceMigrationPreservesModelIDsAndHistory(t *testing.T) {
 			if err := legacy.Close(); err != nil {
 				t.Fatal(err)
 			}
-			database, err := Open(path)
+			database, err := Open(path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -117,7 +117,7 @@ VALUES('legacy-scope','plan',4.5,'[{"kind":"model","value":"model-a"}]');`
 				if _, err := raw.Exec(old); err != nil {
 					t.Fatal(err)
 				}
-				d, err := Open(path)
+				d, err := Open(path, nil)
 				if conflict != "" {
 					if err == nil {
 						d.Close()
@@ -184,9 +184,9 @@ VALUES('legacy-scope','plan',4.5,'[{"kind":"model","value":"model-a"}]');`
 // fresh database, including the absence of any derived alias table.
 func assertMigratedSchema(t *testing.T, migrated *DB) {
 	t.Helper()
-	var missingHeaders int
-	if err := migrated.db.QueryRow("SELECT count(*) FROM request_events WHERE response_headers_json != '{}' OR response_headers_json IS NULL").Scan(&missingHeaders); err != nil || missingHeaders != 0 {
-		t.Fatal("historical response headers must remain unreported", missingHeaders, err)
+	var reports int
+	if err := migrated.db.QueryRow("SELECT count(*) FROM quota_reports").Scan(&reports); err != nil || reports != 0 {
+		t.Fatal("historical quota must remain unreported", reports, err)
 	}
 	fresh := openTestDB(t)
 	readSchema := func(database *DB) string {
@@ -365,7 +365,7 @@ func TestV13CredentialMigrationAndRollback(t *testing.T) {
 			` + scenario.sql); err != nil {
 				t.Fatal(err)
 			}
-			database, err := Open(path)
+			database, err := Open(path, nil)
 			if scenario.sql != "" {
 				if err == nil {
 					database.Close()
@@ -472,7 +472,7 @@ func TestV12QuotaWindowsMigrationAndRollback(t *testing.T) {
 			if _, err := raw.Exec("PRAGMA user_version=12"); err != nil {
 				t.Fatal(err)
 			}
-			database, err := Open(path)
+			database, err := Open(path, nil)
 			if scenario == "missing cycle time" || scenario == "mixed format" {
 				if err == nil {
 					database.Close()
@@ -504,7 +504,7 @@ func TestV12QuotaWindowsMigrationAndRollback(t *testing.T) {
 				t.Fatalf("migration lost state: %+v", snapshot)
 			}
 			database.Close()
-			reopened, err := Open(path)
+			reopened, err := Open(path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -569,7 +569,7 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 				if err := raw.QueryRow(schemaSQL).Scan(&before); err != nil {
 					t.Fatal(err)
 				}
-				database, err := Open(path)
+				database, err := Open(path, nil)
 				if conflict {
 					if err == nil {
 						database.Close()
@@ -583,9 +583,9 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer database.Close()
-					var empty int
-					if err := raw.QueryRow("SELECT count(*) FROM request_events WHERE response_headers_json='{}'").Scan(&empty); err != nil || empty != 3 {
-						t.Fatal("historical headers must remain unreported", empty, err)
+					var reports int
+					if err := raw.QueryRow("SELECT count(*) FROM quota_reports").Scan(&reports); err != nil || reports != 0 {
+						t.Fatal("historical quota must remain unreported", reports, err)
 					}
 					view, err := database.RequestEvents(billing.RequestEventQuery{}, time.Time{})
 					if err != nil || view.Total != 3 || view.Statuses.Failed != 1 {
@@ -658,7 +658,7 @@ func TestUpstreamResponseReportsMigration(t *testing.T) {
 			if _, err := raw.Exec(legacy); err != nil {
 				t.Fatal(err)
 			}
-			database, err := Open(path)
+			database, err := Open(path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -710,7 +710,7 @@ func TestRequestErrorReasonMigration(t *testing.T) {
 					VALUES(1,502,'upstream_error','HTTP 502','{"error":"preserved"}');`); err != nil {
 				t.Fatal(err)
 			}
-			database, err := Open(path)
+			database, err := Open(path, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -731,6 +731,16 @@ func TestRequestErrorReasonMigration(t *testing.T) {
 	}
 }
 
+// downgradeToV19 stores quota headers with each request again, in place of reports.
+func downgradeToV19(t *testing.T, d *DB) {
+	t.Helper()
+	if _, err := d.db.Exec(`DROP TABLE quota_report_windows; DROP TABLE quota_reports;
+		ALTER TABLE request_events ADD COLUMN response_headers_json TEXT NOT NULL DEFAULT '{}';
+		PRAGMA user_version = 19;`); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestV18ExecutionMetadataMigrationPreservesAllEvents(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v18.db")
 	database := openDatabase(t, path)
@@ -739,6 +749,7 @@ func TestV18ExecutionMetadataMigrationPreservesAllEvents(t *testing.T) {
 	zero := billing.RequestEvent{At: eventStart.Add(2 * time.Second), Scope: "scope"}
 	failed := billing.RequestEvent{At: eventStart.Add(time.Second), Scope: "scope", Failed: true}
 	mustSave(t, database, billing.NewState(), billing.Changes{NormalRequestEvents: []billing.RequestEvent{normal, zero}, RequestErrorEvents: []billing.RequestErrorEvent{{Event: failed, Error: billing.RequestError{StatusCode: 502, Body: "preserved failure"}}}})
+	downgradeToV19(t, database)
 	if _, err := database.db.Exec("ALTER TABLE request_events DROP COLUMN execution_json; PRAGMA user_version=18;"); err != nil {
 		t.Fatal(err)
 	}

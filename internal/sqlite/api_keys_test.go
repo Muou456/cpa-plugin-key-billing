@@ -67,7 +67,7 @@ func TestOldKeyPreviewRepairPreservesHistoryAndCanBeResolved(t *testing.T) {
 	if err := database.db.QueryRow("SELECT preview FROM api_keys WHERE scope = ?", scope).Scan(&preview); err != nil || preview != billing.UnknownKeyPreview {
 		t.Fatalf("repair was not persisted: %q, %v", preview, err)
 	}
-	store := billing.NewStore(func(path string) (billing.Repository, error) { return Open(path) }, nil)
+	store := billing.NewStore(func(path string) (billing.Repository, error) { return Open(path, nil) }, nil)
 	defer store.Close()
 	cfg := billing.DefaultConfig()
 	cfg.StateFile = path

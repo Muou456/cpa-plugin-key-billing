@@ -49,7 +49,7 @@ func newApp(store *billing.Store) *App {
 }
 
 func openRepository(path string) (billing.Repository, error) {
-	return sqlite.Open(path)
+	return sqlite.Open(path, quotaHeaderReport)
 }
 
 // HandleMethod dispatches one host RPC call. A panic anywhere below is
