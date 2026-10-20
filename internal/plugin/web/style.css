@@ -1749,8 +1749,7 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .section-actions { min-width: 0; }
 .section-actions > button, .usage-distribution-tabs button { white-space: nowrap; }
 .key-toolbar-buttons { gap: 8px; }
-#keys-import-labels { display: none; }
-:root[data-cpamp-plugin-host="true"] body.embedded #keys-import-labels { display: inline-flex; }
+body:not(.embedded) #keys-import-labels { display: none; }
 .event-list-card {
   height: calc(100svh - var(--event-list-top, var(--page-gap)) - var(--page-gap));
   min-height: 0;
@@ -2047,9 +2046,8 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
   #tab-keys .section-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #tab-keys .key-toolbar-buttons { display: contents; }
   #tab-keys .key-toolbar-buttons > * { align-self: stretch; width: 100%; min-width: 0; white-space: normal; }
-  /* Only CPAMP shows the import button; without it search takes the whole line and the rest pair up below. */
-  #tab-keys .section-actions > .wide-search { grid-column: 1 / -1; }
-  :root[data-cpamp-plugin-host="true"] body.embedded #tab-keys .section-actions > .wide-search { grid-column: auto; }
+  /* Standalone pages have no import button, so search takes the whole line and the rest pair up below. */
+  body:not(.embedded) #tab-keys .section-actions > .wide-search { grid-column: 1 / -1; }
   /* Search takes the whole line; the remaining controls split the next one and wrap labels too long for half of it. */
   #tab-prices .section-actions, #tab-plugin-logs .section-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #price-filter, #plugin-log-filter { grid-column: 1 / -1; }

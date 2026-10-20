@@ -283,31 +283,25 @@ function renderKeyRoutes(view) {
   );
 }
 
-async function importCPAMPLabels() {
+/* Host panels know API keys only by hash, so each label source returns [hash, label] pairs with the hash it gives a key. */
+async function importPanelLabels(load) {
   const generation = sessionGeneration;
-  const result = await api("GET", "/v0/management/api-key-aliases", null);
-  if (
-    !Array.isArray(result?.items) ||
-    result.items.some(
-      (item) => !item || typeof item.apiKeyHash !== "string" || !/^[a-f0-9]{64}$/i.test(item.apiKeyHash) || typeof item.alias !== "string"
-    )
-  )
-    throw new UIError(m("ui.invalid_cpamp_label_list"));
+  const { labels, fingerprint } = await load();
   const keys = await fetchConfiguredAPIKeys();
   const scopes = new Map();
   for (const key of keys) {
     const value = key.trim();
-    if (value) scopes.set(await sha256Hex(value), await sha256Hex(CALLER_SCOPE_SALT + value));
+    if (value) scopes.set(await fingerprint(value), await sha256Hex(CALLER_SCOPE_SALT + value));
   }
   if (generation !== sessionGeneration) throw new StaleRequestError();
   let imported = 0;
   let unchanged = 0;
   try {
-    for (const item of result.items) {
+    for (const [hash, alias] of labels) {
       if (generation !== sessionGeneration) throw new StaleRequestError();
-      const scope = scopes.get(item.apiKeyHash.toLowerCase());
+      const scope = scopes.get(hash);
       if (!scope) continue;
-      const label = item.alias.trim();
+      const label = alias.trim();
       const key = (resources.admin.keys.value || []).find((key) => key.scope === scope);
       if (key && (keyDirectory.resolve(key).label || "") === label) {
         unchanged++;
@@ -320,7 +314,7 @@ async function importCPAMPLabels() {
     if (err instanceof AuthError || err instanceof StaleRequestError) throw err;
     throw new UIError(m("ui.imported_value_labels_import_interrupted_value", { v0: imported, v1: err.message || err }));
   } finally { if (imported && generation === sessionGeneration) renderPage(); }
-  const skipped = result.items.length - imported - unchanged;
+  const skipped = labels.length - imported - unchanged;
   notify(
     m("ui.imported_value_labelsvaluevalue", {
       v0: imported,
@@ -330,19 +324,45 @@ async function importCPAMPLabels() {
   );
 }
 
+async function cpampLabels() {
+  const result = await api("GET", "/v0/management/api-key-aliases", null);
+  if (
+    !Array.isArray(result?.items) ||
+    result.items.some(
+      (item) => !item || typeof item.apiKeyHash !== "string" || !/^[a-f0-9]{64}$/i.test(item.apiKeyHash) || typeof item.alias !== "string"
+    )
+  )
+    throw new UIError(m("ui.invalid_cpamp_label_list"));
+  return { labels: result.items.map((item) => [item.apiKeyHash.toLowerCase(), item.alias]), fingerprint: sha256Hex };
+}
+
+/* CPAMC keeps labels in browser storage under the API base it is connected to, which must be this server. */
+function cpamcLabels() {
+  const apiBase = panelStoredValue("cli-proxy-auth")?.state?.apiBase;
+  let origin = "";
+  try { origin = new URL(apiBase).origin; } catch (_) {}
+  if (origin !== location.origin) throw new UIError(m("ui.cannot_read_cpamc_labels_open_cpamc_from_this_cpa_s_address_and_try_again"));
+  const stored = panelStoredValue("api-key-names:v1:" + apiBase);
+  const labels = Object.entries(stored && typeof stored === "object" ? stored : {}).filter(([, label]) => typeof label === "string");
+  return { labels, fingerprint: (key) => sha256Hex(JSON.stringify(["api-key-name", apiBase, key])) };
+}
+
 $("key-filter").addEventListener("input", renderKeys);
 $("keys-include-deleted").addEventListener("change", () => {
   saveChoice("admin", "keys-include-deleted");
   renderKeys();
 });
 
-$("keys-import-labels").onclick = () =>
+$("keys-import-labels").onclick = () => {
+  const [panel, load] =
+    document.documentElement.getAttribute("data-cpamp-plugin-host") === "true" ? ["CPAMP", cpampLabels] : ["CPAMC", cpamcLabels];
   openActionDialog(
-    m("ui.import_cpamp_labels"),
-    m("ui.import_cpamp_api_key_labels_and_overwrite_existing_labels_for_matching_keys_unmatched"),
+    m("ui.import_value_labels", { v0: panel }),
+    m("ui.import_value_api_key_labels_and_overwrite_existing_labels_for_matching_keys_unmatched", { v0: panel }),
     undefined,
-    importCPAMPLabels
+    () => importPanelLabels(load)
   );
+};
 $("keys-reset-all").onclick = () =>
   openActionDialog(
     m("ui.reset_all_subscription_quotas"),
