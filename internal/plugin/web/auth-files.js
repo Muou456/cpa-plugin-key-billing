@@ -31,14 +31,32 @@ function authFileMeta(file) {
   );
 }
 
+// Wide tables show one form of a plan's expiry; switching it applies to every row.
+let authPlanShowsEndTime = false;
+
 function renderAuthFilePlan(file, quota) {
-  const left = file.subscription_until - Date.now();
-  return credentialMetric(
-    "plan",
-    m("ui.plan"),
-    quota?.plan?.trim() || "—",
-    left > 0 && { value: m("time.left_day", { count: Math.ceil(left / 86400000) }) }
-  );
+  const left = (file.subscription_until - Date.now()) / 1000;
+  const toggle = m("ui.switch_between_time_left_and_end_time");
+  const expiry =
+    left > 0 &&
+    el(
+      "span",
+      { class: "auth-plan-expiry" + (authPlanShowsEndTime ? " end-time" : "") },
+      el("span", { class: "auth-plan-time-left", text: compactTimeUntil(left, "left") }),
+      el("span", { class: "auth-plan-expiry-separator", text: DISPLAY_SEPARATOR }),
+      el("span", { class: "auth-plan-end-time", text: compactResetDate(new Date(file.subscription_until)) }),
+      el(
+        "button",
+        { class: "inline-icon-button link", type: "button", "data-tip": toggle, "aria-label": toggle, onclick: toggleAuthPlanTime },
+        actionIcon("arrow-left-right")
+      )
+    );
+  return credentialMetric("plan", m("ui.plan"), quota?.plan?.trim() || "—", expiry && { value: expiry });
+}
+
+function toggleAuthPlanTime() {
+  authPlanShowsEndTime = !authPlanShowsEndTime;
+  for (const expiry of document.querySelectorAll(".auth-plan-expiry")) expiry.classList.toggle("end-time", authPlanShowsEndTime);
 }
 
 function authProviderIcon(category) {

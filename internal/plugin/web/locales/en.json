@@ -19,6 +19,7 @@
   "ui.error_events": "Error events",
   "ui.auth_files": "Auth Files",
   "ui.plan": "Plan",
+  "ui.switch_between_time_left_and_end_time": "Switch between time left and end time",
   "ui.credential_routing": "Priority: {priority} · Weight: {weight}",
   "ui.settings": "Settings",
   "ui.filter_by_api_key": "Filter by API key",

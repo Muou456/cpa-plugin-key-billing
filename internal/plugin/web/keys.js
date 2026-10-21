@@ -162,7 +162,7 @@ function renderKeys() {
               el(
                 "button",
                 {
-                  class: "key-copy-button link",
+                  class: "inline-icon-button link",
                   type: "button",
                   disabled: deleted || !view.in_config,
                   "data-tip": m("ui.copy_api_key"),

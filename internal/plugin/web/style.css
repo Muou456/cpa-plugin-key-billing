@@ -730,7 +730,7 @@ tbody tr:hover { background: var(--bg-hover); }
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
-button.key-copy-button {
+button.inline-icon-button {
   display: grid;
   place-items: center;
   width: 22px;
@@ -740,11 +740,11 @@ button.key-copy-button {
   color: var(--text-tertiary);
   opacity: 0.58;
 }
-button.key-copy-button:hover:not(:disabled), button.key-copy-button:focus-visible { color: var(--text-secondary); opacity: 1; }
-button.key-copy-button.link:hover { text-decoration: none; }
-button.key-copy-button.copied, button.key-copy-button.copied:hover { color: var(--primary-color); opacity: 1; }
-:root[data-cpamp-plugin-host="true"] button.key-copy-button { min-height: 22px; padding: 0; }
-.key-copy-button .lucide-icon { width: 12px; height: 12px; }
+button.inline-icon-button:hover:not(:disabled), button.inline-icon-button:focus-visible { color: var(--text-secondary); opacity: 1; }
+button.inline-icon-button.link:hover { text-decoration: none; }
+button.inline-icon-button.copied, button.inline-icon-button.copied:hover { color: var(--primary-color); opacity: 1; }
+:root[data-cpamp-plugin-host="true"] button.inline-icon-button { min-height: 22px; padding: 0; }
+.inline-icon-button .lucide-icon { width: 12px; height: 12px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 .notice { padding: 10px 14px; border-radius: var(--radius-md); margin-bottom: 14px; display: none; border: 1px solid transparent; }
 .notice.show { display: block; }
@@ -1340,6 +1340,14 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   color: var(--failure-badge-text);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+.auth-plan-expiry .inline-icon-button { display: none; }
+@container credential-table (min-width: 901px) {
+  .auth-plan-expiry { display: inline-flex; align-items: center; }
+  .auth-plan-expiry-separator, .auth-plan-expiry.end-time .auth-plan-time-left, .auth-plan-expiry:not(.end-time) .auth-plan-end-time {
+    display: none;
+  }
+  .auth-plan-expiry .inline-icon-button { display: grid; }
 }
 @container credential-table (max-width: 900px) {
   .credential-table, .credential-table tbody { display: block; }

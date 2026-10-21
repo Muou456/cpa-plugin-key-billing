@@ -285,7 +285,7 @@ function credentialMetric(name, label, value, secondary) {
       "span",
       { class: "credential-metric-detail" + (secondary.inline ? " inline" : "") },
       secondary.label && el("span", { class: "credential-metric-detail-label", text: secondary.label }),
-      el("span", { class: "credential-metric-detail-value", text: secondary.value })
+      el("span", { class: "credential-metric-detail-value" }, secondary.value)
     );
   return el(
     "td",
