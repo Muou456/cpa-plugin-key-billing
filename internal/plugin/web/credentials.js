@@ -177,12 +177,7 @@ async function parseConfiguredCredentials(config) {
   return credentials;
 }
 
-function credentialName(item) {
-  return window.billingI18n.serverMessage(
-    item.display_name_message,
-    item.display_name || (item.source === "auth-files" ? m("ui.no_email_provided") : m("ui.no_api_key_configured"))
-  );
-}
+function credentialName(item) { return window.billingI18n.serverMessage(item.display_name_message, item.display_name); }
 
 function credentialLabel(item) { return m("ui.join", { v0: item.provider, v1: DISPLAY_SEPARATOR, v2: credentialName(item) }); }
 

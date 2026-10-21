@@ -58,8 +58,8 @@ type hostAuthFile struct {
 type authFileView struct {
 	AuthIndex          string                       `json:"auth_index"`
 	Name               string                       `json:"name"`
+	Title              string                       `json:"title"`
 	Category           string                       `json:"category"`
-	Email              string                       `json:"email,omitempty"`
 	Disabled           bool                         `json:"disabled"`
 	Unavailable        bool                         `json:"unavailable"`
 	Priority           int                          `json:"priority"`
@@ -271,7 +271,7 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 		category := authCategory(file.Type)
 		quotaSupported, quotaReason := authQuotaAvailability(file, category)
 		views = append(views, authFileView{
-			AuthIndex: file.AuthIndex, Name: file.Name, Category: category, Email: cleanText(file.Email),
+			AuthIndex: file.AuthIndex, Name: file.Name, Title: authFileTitle(file), Category: category,
 			Disabled: file.Disabled, Unavailable: file.Unavailable, Priority: file.Priority,
 			QuotaSupported: quotaSupported, QuotaReason: quotaReason, CacheRevision: authFileRevision(file),
 			QuotaReasonMessage: messages.Literal(quotaReason),
@@ -385,6 +385,21 @@ func (a *App) listHostAuthFiles() ([]hostAuthFile, error) {
 		return nil, messages.Errorf("Parse auth file list: %w", errDecode)
 	}
 	return response.Files, nil
+}
+
+// Auth files are titled the way CPAMC titles them: email, then project ID, then
+// the file name. An email is never parsed out of the file name.
+func authFileTitle(file hostAuthFile) string {
+	for _, title := range []string{file.Email, file.ProjectID} {
+		if title = cleanText(title); title != "" {
+			return title
+		}
+	}
+	name := cleanText(file.Name)
+	if base := len(name) - len(".json"); base > 0 && strings.EqualFold(name[base:], ".json") {
+		return name[:base]
+	}
+	return name
 }
 
 func authCategory(authType string) string {

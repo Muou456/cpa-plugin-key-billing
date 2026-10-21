@@ -109,7 +109,7 @@ func maskAPIKeyPayload(payload any) (any, bool) {
 	case authFileListResponse:
 		for i := range value.Files {
 			value.Files[i].Name = maskEmails(value.Files[i].Name)
-			value.Files[i].Email = maskEmails(value.Files[i].Email)
+			value.Files[i].Title = maskEmails(value.Files[i].Title)
 			value.Files[i].QuotaReason = maskEmails(value.Files[i].QuotaReason)
 			value.Files[i].QuotaReasonMessage = maskMessage(value.Files[i].QuotaReasonMessage)
 		}

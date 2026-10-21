@@ -315,19 +315,21 @@ func TestAIProviderCredentialDisplayNameMasksKeysAndAccounts(t *testing.T) {
 	}
 }
 
-func TestAuthFileCredentialDisplayNameUsesOnlyEmail(t *testing.T) {
-	file := hostAuthFile{
-		Name:    "codex-1dfbc38b-wrong@example.com-pro.json",
-		Label:   "private label",
-		Email:   "user@example.com",
-		Account: "sk-upstream-secret-value",
-	}
-	name := credentialDisplayName(file, billing.CredentialSourceAuthFiles, "codex", billing.CredentialFingerprint("id"))
-	if name != file.Email {
-		t.Fatalf("name=%q, want email %q", name, file.Email)
-	}
-	if inferred := credentialDisplayName(hostAuthFile{Name: file.Name}, billing.CredentialSourceAuthFiles, "codex", billing.CredentialFingerprint("missing-email")); inferred != "No email provided" {
-		t.Fatalf("missing CPA email inferred from filename: %q", inferred)
+// Auth files are named like CPAMC names them, and an email is never parsed out
+// of a file name.
+func TestAuthFileCredentialDisplayNameFollowsCPAMC(t *testing.T) {
+	const fileName = "codex-1dfbc38b-wrong@example.com-pro.json"
+	for _, test := range []struct {
+		file hostAuthFile
+		want string
+	}{
+		{hostAuthFile{Name: fileName, Label: "private label", Email: "user@example.com", ProjectID: "project-1"}, "user@example.com"},
+		{hostAuthFile{Name: fileName, ProjectID: "project-1"}, "project-1"},
+		{hostAuthFile{Name: fileName, Account: "sk-upstream-secret-value"}, "codex-1dfbc38b-wrong@example.com-pro"},
+	} {
+		if got := credentialDisplayName(test.file, billing.CredentialSourceAuthFiles, "codex", billing.CredentialFingerprint("id")); got != test.want {
+			t.Fatalf("name = %q, want %q", got, test.want)
+		}
 	}
 }
 

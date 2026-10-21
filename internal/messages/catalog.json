@@ -500,10 +500,6 @@
     "key": "backend.limit_must_be_an_integer_from_1_to_50",
     "formats": []
   },
-  "No email provided": {
-    "key": "backend.no_email_provided",
-    "formats": []
-  },
   "Too many configured credentials": {
     "key": "backend.too_many_configured_credentials",
     "formats": []

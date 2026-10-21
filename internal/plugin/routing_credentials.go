@@ -60,12 +60,7 @@ func safeCredentialName(raw, account, provider, ref string) string {
 
 func credentialDisplayName(file hostAuthFile, source, provider, ref string) string {
 	if source == billing.CredentialSourceAuthFiles {
-		// Authentication-file identity comes only from CPA's explicit email.
-		email := cleanText(file.Email)
-		if email == "" {
-			return "No email provided"
-		}
-		return email
+		return authFileTitle(file)
 	}
 	name := file.Label
 	if strings.TrimSpace(name) == "" {
@@ -196,11 +191,6 @@ func (a *App) refreshCredentialInventory() error {
 		next[ref] = credentialView{Ref: ref, Source: source, Provider: provider,
 			DisplayName: credentialDisplayName(file, source, provider, ref), Status: file.Status,
 			Disabled: file.Disabled, Unavailable: file.Unavailable}
-		if source == billing.CredentialSourceAuthFiles && cleanText(file.Email) == "" {
-			item := next[ref]
-			item.DisplayMessage = messages.New("No email provided")
-			next[ref] = item
-		}
 		raw[id] = billing.CredentialProviderSelector{Source: source, Provider: provider}
 	}
 	a.routingMu.Lock()
@@ -239,11 +229,10 @@ func (a *App) observeCandidates(candidates []SchedulerAuthCandidate) {
 			continue
 		}
 		provider := strings.ToLower(strings.TrimSpace(candidate.Provider))
-		name := "Configured credential " + shortCredentialRef(ref)
-		detail := messages.New("Configured credential %s", shortCredentialRef(ref))
+		name, detail := "Configured credential "+shortCredentialRef(ref), messages.New("Configured credential %s", shortCredentialRef(ref))
 		if source == billing.CredentialSourceAuthFiles {
-			name = "No email provided"
-			detail = messages.New("No email provided")
+			// A file credential's ID is its path under the auth directory.
+			name, detail = authFileTitle(hostAuthFile{Name: filepath.Base(id)}), messages.Message{}
 		}
 		if existing, ok := a.credentials[ref]; ok && existing.DisplayName != "" {
 			name = existing.DisplayName

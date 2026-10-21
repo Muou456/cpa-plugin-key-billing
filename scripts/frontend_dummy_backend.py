@@ -329,7 +329,7 @@ CREDENTIALS = [
     {"ref": "sha256:" + "d" * 64, "source": "ai-providers", "provider": "deepseek", "display_name": "sk-live…91b2", "status": "disabled", "disabled": True, "unavailable": False},
     {"ref": "sha256:" + "e" * 64, "source": "auth-files", "provider": "xai", "display_name": "disabled@example.com", "status": "disabled", "disabled": True, "unavailable": False},
     {"ref": AUTOMATION_CREDENTIAL_REF, "source": "auth-files", "provider": "codex", "display_name": "automation@example.com", "status": "active", "disabled": False, "unavailable": False},
-    {"ref": UNAVAILABLE_CREDENTIAL_REF, "source": "auth-files", "provider": "kimi", "display_name": "research@example.com", "status": "error", "disabled": False, "unavailable": True},
+    {"ref": UNAVAILABLE_CREDENTIAL_REF, "source": "auth-files", "provider": "kimi", "display_name": "kimi-research", "status": "error", "disabled": False, "unavailable": True},
 ]
 SYNCED_CREDENTIAL_REFS = set()
 
@@ -409,9 +409,8 @@ AUTH_FILES = [
     },
     {
         "auth_index": "auth-demo-kimi",
-        "name": "kimi-research@example.com.json",
+        "name": "kimi-research.json",
         "category": "kimi",
-        "email": "research@example.com",
         "disabled": False,
         "unavailable": True,
         "priority": 0,
@@ -530,7 +529,8 @@ def auth_file_views(files, query, scope=""):
     views = []
     for index, item in enumerate(files):
         rows = [entry for entry in entries if entry["auth_index"] == item["auth_index"]]
-        view = {field: value for field, value in item.items() if field not in ("weight", "id_token")}
+        view = {field: value for field, value in item.items() if field not in ("weight", "id_token", "email")}
+        view["title"] = item.get("email") or item["name"].removesuffix(".json")
         view["usage"] = credential_usage(rows)
         if item["category"] in ("codex", "claude"):
             quota = auth_file_quota({"auth_index": [item["auth_index"]]})

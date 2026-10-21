@@ -53,8 +53,8 @@ func TestAuthFilesExposeOnlyDisplayFieldsInCategoryOrder(t *testing.T) {
 	if payload.Files[2].CacheRevision != "2026-09-02T01:02:03Z" {
 		t.Fatalf("cache revision = %q", payload.Files[2].CacheRevision)
 	}
-	if payload.Files[2].Email != "user@example.com" {
-		t.Fatalf("email = %q, want CPA email", payload.Files[2].Email)
+	if payload.Files[2].Title != "user@example.com" || payload.Files[3].Title != "zeta" {
+		t.Fatalf("titles = %q, %q, want the CPA email and the file name", payload.Files[2].Title, payload.Files[3].Title)
 	}
 	// The host omits the default priority, which the UI still shows as P0.
 	if payload.Files[2].Priority != 99 || !strings.Contains(encoded, `"priority":0`) {

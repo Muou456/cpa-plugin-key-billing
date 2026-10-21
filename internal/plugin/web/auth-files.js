@@ -184,7 +184,7 @@ function filteredAuthFiles(account) {
     if (provider && file.category !== provider) return false;
     if (!search) return true;
     const currentPlan = authFileQuota(file, ui.owner)?.plan;
-    return [file.name, file.email, currentPlan, file.category].some((value) => String(value || "").toLocaleLowerCase().includes(search));
+    return [file.name, file.title, currentPlan, file.category].some((value) => String(value || "").toLocaleLowerCase().includes(search));
   });
 }
 
@@ -431,12 +431,7 @@ function renderAuthFileRow(file, account) {
         el(
           "div",
           { class: "credential-identity" },
-          el("div", {
-            class: "credential-title mask-blur",
-            "data-tip": file.email || file.name,
-            "data-tip-overflow": "",
-            text: file.email || file.name || m("ui.no_email_provided")
-          }),
+          el("div", { class: "credential-title mask-blur", "data-tip": file.title, "data-tip-overflow": "", text: file.title }),
           authFileMeta(file)
         )
       )
@@ -704,20 +699,13 @@ async function loadAuthDrawerHistory() {
 function renderAuthDrawerFile() {
   const ui = authUI(authDrawer.account);
   const file = (ui.files.value || []).find((item) => item.auth_index === authDrawer.file.auth_index) || authDrawer.file;
-  const title = file.email || file.name;
   authDrawer.file = file;
   $("auth-drawer-identity").replaceChildren(
     authProviderIcon(file.category),
     el(
       "div",
       { class: "drawer-title" },
-      el("h2", {
-        id: "auth-drawer-title",
-        class: "mask-blur",
-        "data-tip": title,
-        "data-tip-overflow": "",
-        text: title || m("ui.no_email_provided")
-      }),
+      el("h2", { id: "auth-drawer-title", class: "mask-blur", "data-tip": file.title, "data-tip-overflow": "", text: file.title }),
       authFileMeta(file)
     )
   );
