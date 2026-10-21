@@ -105,11 +105,11 @@ CPA 按插件优先级选择调度插件，不会依次调用。建议显式设�
 > - v1.0.0 至最新版本的数据库文件支持自动迁移。
 > - v0.8.4 及更早版本的 JSON 或 SQLite 数据文件不支持迁移，请将 `state_file` 指向新文件。
 
-重启 CLIProxyAPI 后，在管理中心打开「API Key Billing」。确认模型定价后，创建订阅计划并绑定需要限制的 API Key。
+重启 CLIProxyAPI 后，在管理中心打开「CPA Key Billing」。确认模型定价后，创建订阅计划并绑定需要限制的 API Key。
 
 ## 页面访问
 
-管理员可以从 CLIProxyAPI 管理中心的「API Key Billing」菜单进入，也可以直接打开：
+管理员可以从 CLIProxyAPI 管理中心的「CPA Key Billing」菜单进入，也可以直接打开：
 
 ```text
 http(s)://<CLIProxyAPI 地址>/v0/resource/plugins/cpa-key-billing/ui

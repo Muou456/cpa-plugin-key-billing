@@ -20,7 +20,7 @@ const (
 	PluginName = "cpa-key-billing"
 	Version    = "1.4.5"
 
-	MenuLabel       = "API Key Billing"
+	MenuLabel       = "CPA Key Billing"
 	MenuDescription = "Manage downstream API key routing, billing, concurrency limits, subscription quotas, and usage"
 
 	GitHubRepository = "https://github.com/haowang02/cpa-plugin-key-billing"

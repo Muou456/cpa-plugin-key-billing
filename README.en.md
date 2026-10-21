@@ -111,7 +111,7 @@ For initial selections or invalid session bindings, the plugin uses the highest 
 > - Databases created by v1.0.0 or later are migrated automatically.
 > - JSON and SQLite files from v0.8.4 or earlier cannot be migrated. Point `state_file` to a new file instead.
 
-Restart CLIProxyAPI and open **API Key Billing** in the management panel. Review model pricing, create subscription plans, and bind the API keys whose quotas you want to enforce.
+Restart CLIProxyAPI and open **CPA Key Billing** in the management panel. Review model pricing, create subscription plans, and bind the API keys whose quotas you want to enforce.
 
 ## Access
 

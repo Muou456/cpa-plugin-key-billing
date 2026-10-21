@@ -107,7 +107,7 @@ async function setLoginMode(mode, preserveError) {
   const tab = route.role === loginMode ? route.tab : loginMode === "account" ? "subscription" : "keys";
   writePageRoute(loginMode, tab);
   const account = loginMode === "account";
-  setText(document.querySelector("title"), m(account ? "ui.api_key_usage" : "ui.api_key_billing"));
+  setText(document.querySelector("title"), account ? m("ui.api_key_usage") : PRODUCT_NAME);
   $("gate-mode-admin").classList.toggle("active", !account);
   $("gate-mode-admin").setAttribute("aria-selected", String(!account));
   $("gate-mode-account").classList.toggle("active", account);
@@ -185,7 +185,7 @@ $("gate-mode-admin").onclick = () => setLoginMode("admin");
 $("gate-mode-account").onclick = () => setLoginMode("account");
 
 async function startAdmin(key) {
-  setText(document.querySelector("title"), m("ui.api_key_billing"));
+  setText(document.querySelector("title"), PRODUCT_NAME);
   const generation = sessionGeneration;
   currentRole = "admin";
   authKey = key;

@@ -1,5 +1,6 @@
 const PLUGIN_BASE = "/v0/management/plugins/cpa-key-billing";
 const ACCOUNT_BASE = "/v0/resource/plugins/cpa-key-billing";
+const PRODUCT_NAME = "CPA Key Billing";
 const DISPLAY_SEPARATOR = "\u2009·\u2009";
 const DISPLAY_SLASH = "\u2009/\u2009";
 const $ = (id) => document.getElementById(id);
