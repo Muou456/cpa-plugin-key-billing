@@ -96,7 +96,7 @@ func TestUsageHandleBillsWithoutResponseOrCompletionHooks(t *testing.T) {
 	if requests != 1 {
 		t.Fatalf("Requests = %d, want 1", requests)
 	}
-	if entry := requestEventEntries(t, app)[0]; entry.Endpoint != "" || entry.Transport != "" || entry.Stream != nil {
+	if entry := requestEventEntries(t, app)[0]; entry.RequestOrigin != (billing.RequestOrigin{}) || entry.Stream != nil {
 		t.Fatalf("missing host metadata was reconstructed: %+v", entry)
 	}
 }
@@ -252,7 +252,7 @@ func TestUsageHandleBillsNonGeneratingRequest(t *testing.T) {
 	if len(entries) != 1 || entries[0].Cost.CacheReadTokens != 400 || entries[0].Cost.BilledOutputTokens != 0 {
 		t.Fatalf("entries = %+v", entries)
 	}
-	if entry := entries[0]; entry.Endpoint != "" || entry.Transport != "" || entry.Stream == nil || *entry.Stream || entry.TTFTMS != 12 {
+	if entry := entries[0]; entry.RequestOrigin != (billing.RequestOrigin{}) || entry.Stream == nil || *entry.Stream || entry.TTFTMS != 12 {
 		t.Fatalf("invented request metadata or changed host timing: %+v", entry)
 	}
 }
@@ -301,7 +301,10 @@ func TestUsageHandleDoesNotGuessAmbiguousUnknownAccounting(t *testing.T) {
 
 func TestUsageHandlePersistsBillWithoutPlaintextKeys(t *testing.T) {
 	app, statePath := newAppWithPriceAndState(t, true)
-	app.rememberRequestOrigin(RequestInterceptRequest{RequestID: "intercept-request", TraceID: "privacy-trace"}, flowScope(), "/v1/messages?key=dummy-secret")
+	app.rememberRequestOrigin(RequestInterceptRequest{
+		RequestID: "intercept-request", TraceID: "privacy-trace",
+		Headers: http.Header{"User-Agent": {"dummy-client/1.0"}, "X-Forwarded-For": {"192.0.2.10"}},
+	}, flowScope(), "/v1/messages?key=dummy-secret")
 	publishUsageRecord(t, app, UsageRecord{
 		RequestID: "privacy-execution", TraceID: "privacy-trace",
 		SessionID: "session-1", ParentSessionID: "session-parent", AccessProvider: "config-inline", IsNativeKey: new(bool),
@@ -335,7 +338,8 @@ func TestUsageHandlePersistsBillWithoutPlaintextKeys(t *testing.T) {
 		t.Fatalf("persisted request events = %+v, err = %v", requests.Entries, errRequests)
 	}
 	if entry := requests.Entries[0]; entry.Account != "sk-ups…0001" || entry.Source != "deepseek · sk-ups…0001" ||
-		entry.Endpoint != "/v1/messages" || entry.Transport != "http" || entry.Stream == nil || *entry.Stream {
+		entry.RequestOrigin != (billing.RequestOrigin{Endpoint: "/v1/messages", Transport: "http", UserAgent: "dummy-client/1.0", XForwardedFor: "192.0.2.10"}) ||
+		entry.Stream == nil || *entry.Stream {
 		t.Fatalf("persisted event identity = %+v", entry)
 	}
 

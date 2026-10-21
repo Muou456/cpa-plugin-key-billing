@@ -174,7 +174,9 @@ CREATE TABLE request_events (
 	endpoint                    TEXT    NOT NULL DEFAULT '',
 	transport                   TEXT    NOT NULL DEFAULT '',
 	stream                      INTEGER,
-	execution_json              TEXT    NOT NULL DEFAULT 'null'
+	execution_json              TEXT    NOT NULL DEFAULT 'null',
+	user_agent                  TEXT    NOT NULL DEFAULT '',
+	x_forwarded_for             TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE request_errors (

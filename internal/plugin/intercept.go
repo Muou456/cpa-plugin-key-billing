@@ -51,15 +51,20 @@ func (a *App) endAdmission(requestID string, admission *requestAdmission) {
 	}
 }
 
-const maxRequestOrigins = 16384
+const (
+	maxRequestOrigins = 16384
+	// Client headers are display metadata; longer values stay unknown rather
+	// than widening every stored request.
+	maxClientHeaderBytes = 1024
+)
 
 type requestOriginKey struct {
 	traceID, scope string
 }
 
 type requestOrigin struct {
-	key                 requestOriginKey
-	endpoint, transport string
+	key requestOriginKey
+	billing.RequestOrigin
 }
 
 // Retain origins after request.complete: usage is asynchronous and retries or
@@ -71,22 +76,27 @@ func (a *App) rememberRequestOrigin(req RequestInterceptRequest, scope, endpoint
 	if key.traceID == "" || endpoint == "" {
 		return
 	}
-	transport := "http"
+	reported := billing.RequestOrigin{
+		Endpoint:      endpoint,
+		Transport:     "http",
+		UserAgent:     clientHeader(req.Headers.Get("User-Agent")),
+		XForwardedFor: clientHeader(strings.Join(req.Headers.Values("X-Forwarded-For"), ", ")),
+	}
 	if headerHasToken(req.Headers, "Connection", "upgrade") && headerHasToken(req.Headers, "Upgrade", "websocket") {
-		transport = "websocket"
+		reported.Transport = "websocket"
 	}
 	a.admissionsMu.Lock()
 	defer a.admissionsMu.Unlock()
 	if entry := a.requestOrigins[key]; entry != nil {
 		origin := entry.Value.(*requestOrigin)
-		if origin.endpoint != endpoint || origin.transport != transport {
+		if origin.RequestOrigin != reported {
 			// Conflicting metadata stays unknown for the retained trace.
-			origin.endpoint, origin.transport = "", ""
+			origin.RequestOrigin = billing.RequestOrigin{}
 		}
 		a.requestOriginOrder.MoveToFront(entry)
 		return
 	}
-	a.requestOrigins[key] = a.requestOriginOrder.PushFront(&requestOrigin{key: key, endpoint: endpoint, transport: transport})
+	a.requestOrigins[key] = a.requestOriginOrder.PushFront(&requestOrigin{key, reported})
 	if len(a.requestOrigins) > maxRequestOrigins {
 		oldest := a.requestOriginOrder.Back()
 		delete(a.requestOrigins, oldest.Value.(*requestOrigin).key)
@@ -94,15 +104,23 @@ func (a *App) rememberRequestOrigin(req RequestInterceptRequest, scope, endpoint
 	}
 }
 
-func (a *App) findRequestOrigin(traceID, scope string) requestOrigin {
+func (a *App) findRequestOrigin(traceID, scope string) billing.RequestOrigin {
 	a.admissionsMu.Lock()
 	defer a.admissionsMu.Unlock()
 	entry := a.requestOrigins[requestOriginKey{strings.TrimSpace(traceID), scope}]
 	if entry == nil {
-		return requestOrigin{}
+		return billing.RequestOrigin{}
 	}
 	a.requestOriginOrder.MoveToFront(entry)
-	return *entry.Value.(*requestOrigin)
+	return entry.Value.(*requestOrigin).RequestOrigin
+}
+
+func clientHeader(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > maxClientHeaderBytes {
+		return ""
+	}
+	return value
 }
 
 func requestEndpoint(raw string) string {
@@ -275,11 +293,9 @@ func (a *App) handleUsage(raw []byte) ([]byte, error) {
 		recordError = usageFailureDetails(record.Failure)
 	}
 	at := a.store.Now()
-	origin := a.findRequestOrigin(record.TraceID, scope)
 	event := billing.UsageEvent{
+		RequestOrigin:       a.findRequestOrigin(record.TraceID, scope),
 		Execution:           record.executionMetadata(),
-		Endpoint:            origin.endpoint,
-		Transport:           origin.transport,
 		Stream:              record.Stream,
 		Scope:               scope,
 		KeyPreview:          billing.PreviewKey(record.APIKey),

@@ -272,9 +272,13 @@ protocol_label() {
   esac
 }
 
+# Client headers the plugin records with each request's origin.
+e2e_user_agent="cpa-key-billing-e2e/1.0"
+e2e_forwarded_for="192.0.2.10, 198.51.100.20"
+
 # Each client API authenticates the downstream key its own way.
 client_headers() {
-  printf '%s\n' "Content-Type: application/json"
+  printf '%s\n' "Content-Type: application/json" "User-Agent: $e2e_user_agent" "X-Forwarded-For: $e2e_forwarded_for"
   case "$1" in
     anthropic)
       printf '%s\n' "x-api-key: e2e-downstream-key" "anthropic-version: 2023-06-01"
@@ -1423,14 +1427,18 @@ run_target() {
       --arg billing_model "$billing_model" \
       --arg upstream_model "${matrix_upstream_models[$matrix_index]}" \
       --arg endpoint "$endpoint" \
+      --arg user_agent "$e2e_user_agent" \
+      --arg forwarded_for "$e2e_forwarded_for" \
       --argjson stream "${matrix_streams[$matrix_index]}" \
       --arg source "$expected_source" '
         first(.entries[] | select(.billing_model == $billing_model)) |
         .upstream_model == $upstream_model and
         .source == $source and
         (if (.execution.trace_id // "") == "" then
-          (.endpoint // "") == "" and (.transport // "") == ""
-        else .endpoint == $endpoint and .transport == "http" end) and
+          (.endpoint // "") == "" and (.transport // "") == "" and
+          (.user_agent // "") == "" and (.x_forwarded_for // "") == ""
+        else .endpoint == $endpoint and .transport == "http" and
+          .user_agent == $user_agent and .x_forwarded_for == $forwarded_for end) and
         (.stream == null or .stream == $stream) and
         .failed == false and
         .accounting_quality == "complete" and

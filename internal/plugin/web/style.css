@@ -764,6 +764,7 @@ button.inline-icon-button.copied, button.inline-icon-button.copied:hover { color
   pointer-events: none;
 }
 .hidden { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .gate { max-width: 520px; margin: 9vh auto; padding: 20px; }
 .gate-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .gate h1 { margin: 0; font-size: 18px; line-height: 1.5; }
@@ -1479,6 +1480,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .route-form-toolbar > .row { align-self: end; padding-bottom: 6px; }
 .dialog-input { width: 100%; }
 .dialog-actions { justify-content: flex-end; margin-top: 14px; }
+.dialog-actions > .link { margin-right: auto; }
 dialog.drawer {
   inset: var(--host-header-inset, 0) 0 0 auto;
   width: min(600px, 100vw);
@@ -1657,11 +1659,12 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .key-route-actions > button.link { min-height: 22px; font-size: 12px; }
 .compact-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .compact-actions > button.link { min-width: 0; padding: 0; white-space: nowrap; }
+/* List dialogs keep the title, its note and the actions in view while the list between them scrolls. */
+.list-dialog[open] { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.list-dialog h2 { margin: 0; }
+.list-dialog h2 + p { margin: -4px 0 0; color: var(--text-secondary); overflow-wrap: anywhere; font-size: 12px; }
+.list-dialog .dialog-actions { flex: none; margin-top: 0; }
 .route-picker { width: min(680px, calc(100vw - 32px)); }
-.route-picker[open] { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
-.route-picker h2 { margin: 0; }
-.route-picker-identity { margin: -4px 0 0; color: var(--text-secondary); overflow-wrap: anywhere; font-size: 12px; }
-.route-picker .dialog-actions { flex: none; margin-top: 0; }
 .routing-list { flex: 1 1 auto; min-height: 0; max-height: 52dvh; }
 
 .routing-section-header {
@@ -2018,6 +2021,32 @@ body:not(.embedded) #keys-import-labels { display: none; }
 }
 .request-event-cell-line { display: flex; align-items: center; gap: 4px; min-height: 20px; white-space: nowrap; }
 .request-event-detail { min-height: 20px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.column-settings-dialog { width: min(480px, calc(100vw - 32px)); }
+.column-settings { display: grid; gap: 6px; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.column-setting {
+  display: flex;
+  align-items: center;
+  padding-right: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+.column-setting.dragging { position: relative; z-index: 1; border-color: var(--primary-color); box-shadow: var(--floating-shadow); }
+@media (prefers-reduced-motion: no-preference) {
+  .column-setting { transition: border-color 0.18s, box-shadow 0.18s; }
+  .column-settings.sorting > .column-setting:not(.dragging) { transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1); }
+}
+.column-setting > label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  cursor: pointer;
+}
+button.column-setting-handle { align-self: stretch; width: 32px; cursor: grab; touch-action: none; }
+.column-setting.dragging button.column-setting-handle { cursor: grabbing; }
 .hover-tooltip:has(.cost-tooltip-grid) { max-width: min(480px, calc(100vw - 24px)); }
 .cost-tooltip-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .cost-tooltip-summary { display: flex; gap: 10px; margin-bottom: 8px; color: var(--text-secondary); }
@@ -2283,6 +2312,10 @@ body:not(.embedded) #keys-import-labels { display: none; }
   .settings-entry-field:has(.settings-chip-list) { display: grid; gap: 4px; }
   .settings-entry-field:has(.settings-chip-list) > .settings-entry-label { max-width: none; }
 }
+/* The page actions share one line until they move to the grid below, so their buttons keep only icons. */
+@media (min-width: 521px) and (max-width: 640px) {
+  .page-tab-actions > .labeled-icon-button > .labeled-icon-text { display: none; }
+}
 @media (max-width: 520px) {
   .page-tab-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .page-tab-actions > :is(.native-select, .time-range-control, button) { width: 100%; max-width: none; }
@@ -2291,7 +2324,12 @@ body:not(.embedded) #keys-import-labels { display: none; }
   .page-tab-actions[data-page="analysis"] .auto-refresh-control > select { width: auto; }
   .page-tab-actions[data-page="analysis"].has-key-filter .auto-refresh-control { grid-column: 1 / -1; }
   .page-tab-actions[data-page="analysis"]:not(.has-key-filter) { grid-template-columns: minmax(0, 1fr) max-content; }
-  .page-tab-actions:is([data-page="request-events"], [data-page="errors"]):not(.has-key-filter) .time-range-control { grid-column: 1 / -1; }
+  .page-tab-actions[data-page="errors"]:not(.has-key-filter) .time-range-control { grid-column: 1 / -1; }
+  /* The key and time filters share the first line; refresh fills the second beside the column and export buttons. */
+  .page-tab-actions[data-page="request-events"].has-key-filter { display: flex; flex-wrap: wrap; }
+  .page-tab-actions[data-page="request-events"].has-key-filter > :is(.page-key-filter, .time-range-control) { flex: 1 1 calc(50% - 4px); }
+  .page-tab-actions[data-page="request-events"].has-key-filter > .auto-refresh-control { flex: 1 1 0; }
+  .page-tab-actions[data-page="request-events"].has-key-filter > button { width: auto; }
   .time-range-trigger { width: 100%; }
   .analysis-card-controls { gap: 6px; width: 100%; }
   .usage-distribution-tabs { gap: 4px; --button-padding-inline: 4px; }

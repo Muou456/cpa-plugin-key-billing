@@ -41,11 +41,25 @@ func migrateSchema(tx *sql.Tx, version int, storedHeaders StoredQuotaHeaders) er
 	if version <= 18 {
 		steps = append(steps, migrateExecutionMetadata)
 	}
-	steps = append(steps, func(tx *sql.Tx) error { return migrateQuotaReports(tx, storedHeaders) })
+	if version <= 19 {
+		steps = append(steps, func(tx *sql.Tx) error { return migrateQuotaReports(tx, storedHeaders) })
+	}
+	steps = append(steps, migrateClientHeaders)
 	for _, step := range steps {
 		if err := step(tx); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Schema 21 records the client-reported headers of new requests; historical
+// rows stay unknown.
+func migrateClientHeaders(tx *sql.Tx) error {
+	if _, err := tx.Exec(`
+		ALTER TABLE request_events ADD COLUMN user_agent TEXT NOT NULL DEFAULT '';
+		ALTER TABLE request_events ADD COLUMN x_forwarded_for TEXT NOT NULL DEFAULT '';`); err != nil {
+		return fmt.Errorf("Add request event client headers: %w", err)
 	}
 	return nil
 }

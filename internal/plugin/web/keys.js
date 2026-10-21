@@ -7,26 +7,9 @@ function callerScope(key) { return sha256Hex(CALLER_SCOPE_SALT + key.trim()); }
 // A complete API key finds its row through its scope.
 const keySearch = { term: "", scope: "" };
 
-async function copyAPIKey(button, view) {
-  button.disabled = true;
-  try {
-    let key = "";
-    for (const value of await fetchConfiguredAPIKeys()) {
-      if ((await callerScope(value)) === view.scope) {
-        key = value.trim();
-        break;
-      }
-    }
-    if (!key) throw new UIError(m("ui.this_api_key_no_longer_exists_refresh_the_list"));
-    await copyText(key);
-    button.classList.add("copied");
-    setActionIcon(button, "check", m("ui.copied"));
-    setTimeout(() => {
-      if (!button.isConnected) return;
-      button.classList.remove("copied");
-      setActionIcon(button, "copy", m("ui.copy_api_key"));
-    }, 2000);
-  } finally { button.disabled = false; }
+async function configuredAPIKey(view) {
+  for (const value of await fetchConfiguredAPIKeys()) { if ((await callerScope(value)) === view.scope) return value.trim(); }
+  throw new UIError(m("ui.this_api_key_no_longer_exists_refresh_the_list"));
 }
 
 async function saveConcurrency(view, raw) {
@@ -159,18 +142,7 @@ function renderKeys() {
           renderAPIKeyIdentity(view, {
             stacked: true,
             trailing: [
-              el(
-                "button",
-                {
-                  class: "inline-icon-button link",
-                  type: "button",
-                  disabled: deleted || !view.in_config,
-                  "data-tip": m("ui.copy_api_key"),
-                  "aria-label": m("ui.copy_api_key"),
-                  onclick: (event) => guard(() => copyAPIKey(event.currentTarget, view))
-                },
-                actionIcon("copy")
-              ),
+              copyButton(m("ui.copy_api_key"), () => configuredAPIKey(view), { disabled: deleted || !view.in_config }),
               !deleted && !view.in_config ? el("span", {}, displayText(m("ui.valueusage_tracking_only", { v0: DISPLAY_SEPARATOR }))) : null
             ]
           })

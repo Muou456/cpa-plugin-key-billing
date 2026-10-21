@@ -1098,11 +1098,23 @@ EVENT_SAMPLES = SUCCESS_EVENT_SAMPLES * 2 + FAILURE_EVENT_SAMPLES + UNASSIGNED_E
 def make_request_events():
     entries = []
     request_variants = [
-        {"endpoint": "/v1/chat/completions", "transport": "http", "stream": True},
-        {"endpoint": "/v1/responses", "transport": "websocket", "stream": True},
-        {"endpoint": "/v1/messages", "transport": "http", "stream": False},
+        {"endpoint": "/v1/chat/completions", "transport": "http", "stream": True, "user_agent": "OpenAI/Python 2.8.1", "x_forwarded_for": "203.0.113.24"},
+        {
+            "endpoint": "/v1/responses",
+            "transport": "websocket",
+            "stream": True,
+            "user_agent": "codex_cli_rs/0.144.0 (Mac OS 26.1.0; arm64) iTerm.app/3.6.6",
+            "x_forwarded_for": "198.51.100.7, 192.0.2.44",
+        },
+        {"endpoint": "/v1/messages", "transport": "http", "stream": False, "user_agent": "claude-cli/2.1.30 (external, cli)"},
         {},
-        {"endpoint": "/v1/responses", "transport": "http", "stream": True},
+        {
+            "endpoint": "/v1/responses",
+            "transport": "http",
+            "stream": True,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+            "x_forwarded_for": "2001:db8:85a3::8a2e:370:7334",
+        },
         {"endpoint": "/v1/responses", "transport": "http"},
     ]
     for index, sample in enumerate(EVENT_SAMPLES):

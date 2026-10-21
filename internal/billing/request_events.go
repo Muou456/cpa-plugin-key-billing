@@ -15,13 +15,22 @@ type ExecutionMetadata struct {
 	IsNativeKey     *bool  `json:"is_native_key,omitempty"`
 }
 
+// RequestOrigin describes the inbound client request as admission saw it.
+// Endpoint is the route path only; UserAgent and XForwardedFor are the
+// client-reported headers, which the host does not verify.
+type RequestOrigin struct {
+	Endpoint      string `json:"endpoint,omitempty"`
+	Transport     string `json:"transport,omitempty"`
+	UserAgent     string `json:"user_agent,omitempty"`
+	XForwardedFor string `json:"x_forwarded_for,omitempty"`
+}
+
 // RequestEvent is one persisted request record and never stores a plaintext API key.
 // Account names the upstream credential by an OAuth identity, a masked API key
 // or an auth file title.
 type RequestEvent struct {
+	RequestOrigin
 	Execution           *ExecutionMetadata `json:"execution,omitempty"`
-	Endpoint            string             `json:"endpoint,omitempty"`
-	Transport           string             `json:"transport,omitempty"`
 	Stream              *bool              `json:"stream,omitempty"`
 	At                  time.Time          `json:"at"`
 	Scope               string             `json:"scope"`

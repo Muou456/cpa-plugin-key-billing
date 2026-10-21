@@ -681,6 +681,7 @@ function createPages(role) {
     "request-events": {
       timeRange: true,
       autoRefresh: true,
+      eventColumns: true,
       exportEvents: true,
       list: pagedLists[role].events,
       sections: [keyedSection(["events"], () => renderRequestEvents(account))]

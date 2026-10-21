@@ -514,7 +514,7 @@ func TestV12QuotaWindowsMigrationAndRollback(t *testing.T) {
 }
 
 func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
-	for _, version := range []int{12, 13, 14, 15, 16, 17} {
+	for _, version := range []int{12, 13, 14, 15, 16, 17, 18, 19, 20} {
 		for _, conflict := range []bool{false, true} {
 			t.Run(fmt.Sprintf("v%d/conflict=%v", version, conflict), func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "legacy.db")
@@ -535,6 +535,8 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						{13, migrateModelPricing}, {13, migrateQuotaWindows},
 						{14, migrateCredentials}, {15, migrateResponseHeaders},
 						{16, migrateRequestErrorReason}, {17, migrateUpstreamResponseReports},
+						{18, migrateRequestInfo}, {19, migrateExecutionMetadata},
+						{20, func(tx *sql.Tx) error { return migrateQuotaReports(tx, nil) }},
 					} {
 						if version >= step.version {
 							if err := step.apply(tx); err != nil {
@@ -592,7 +594,7 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						t.Fatalf("migrated view = %+v, err = %v", view, err)
 					}
 					for _, entry := range view.Entries {
-						if entry.Endpoint != "" || entry.Transport != "" || entry.Stream != nil {
+						if entry.RequestOrigin != (billing.RequestOrigin{}) || entry.Stream != nil {
 							t.Fatalf("historical request metadata was invented: %+v", entry)
 						}
 					}
@@ -731,10 +733,13 @@ func TestRequestErrorReasonMigration(t *testing.T) {
 	}
 }
 
-// downgradeToV19 stores quota headers with each request again, in place of reports.
+// downgradeToV19 stores quota headers with each request again, in place of
+// reports, and drops the client headers that schema 21 added.
 func downgradeToV19(t *testing.T, d *DB) {
 	t.Helper()
 	if _, err := d.db.Exec(`DROP TABLE quota_report_windows; DROP TABLE quota_reports;
+		ALTER TABLE request_events DROP COLUMN user_agent;
+		ALTER TABLE request_events DROP COLUMN x_forwarded_for;
 		ALTER TABLE request_events ADD COLUMN response_headers_json TEXT NOT NULL DEFAULT '{}';
 		PRAGMA user_version = 19;`); err != nil {
 		t.Fatal(err)

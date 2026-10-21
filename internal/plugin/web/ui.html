@@ -95,6 +95,7 @@
               <span class="native-select-icon" data-lucide-icon="timer" aria-hidden="true"></span>
               <select id="auto-refresh" aria-label="Auto refresh interval" data-i18n-aria-label="ui.auto_refresh_interval"></select>
             </span>
+            <button id="request-event-columns" class="labeled-icon-button hidden" type="button" aria-haspopup="dialog" data-i18n="ui.columns">Columns</button>
             <button id="events-export" class="labeled-icon-button hidden" type="button" data-i18n="ui.export">Export</button>
           </div>
         </div>
@@ -391,6 +392,7 @@
                 <span class="native-select-icon" data-lucide-icon="timer" aria-hidden="true"></span>
                 <select id="account-auto-refresh" aria-label="Auto refresh interval" data-i18n-aria-label="ui.auto_refresh_interval"></select>
               </span>
+              <button id="account-request-event-columns" class="labeled-icon-button hidden" type="button" aria-haspopup="dialog" data-i18n="ui.columns">Columns</button>
               <button id="account-events-export" class="labeled-icon-button hidden" type="button" data-i18n="ui.export">Export</button>
             </div>
           </div>
@@ -530,6 +532,19 @@
       <div class="row dialog-actions"> <button id="action-cancel" data-i18n="ui.cancel">Cancel</button> <button id="action-confirm" class="primary" data-i18n="ui.confirm">Confirm</button> </div>
     </dialog>
 
+    <dialog id="request-event-columns-dialog" class="settings-dialog list-dialog column-settings-dialog" aria-labelledby="request-event-columns-title" aria-describedby="request-event-columns-hint">
+      <h2 id="request-event-columns-title" data-i18n="ui.columns">Columns</h2>
+      <p id="request-event-columns-hint" data-i18n="ui.request_event_columns_hint">Choose the columns to show and drag them to reorder the table.</p>
+      <div class="editor-state notice hidden"></div>
+      <div id="request-event-columns-list" class="column-settings"></div>
+      <p id="request-event-columns-status" class="visually-hidden" aria-live="polite"></p>
+      <div class="row dialog-actions">
+        <button id="request-event-columns-reset" class="link" data-i18n="ui.reset">Reset</button>
+        <button id="request-event-columns-cancel" data-i18n="ui.cancel">Cancel</button>
+        <button id="request-event-columns-save" class="primary" data-i18n="ui.save">Save</button>
+      </div>
+    </dialog>
+
     <dialog id="auth-drawer" class="drawer" aria-labelledby="auth-drawer-title">
       <header class="drawer-header">
         <div id="auth-drawer-identity" class="drawer-identity"></div>
@@ -556,9 +571,9 @@
       </div>
     </dialog>
 
-    <dialog id="route-picker" class="settings-dialog route-picker" aria-labelledby="route-picker-title" aria-describedby="route-picker-identity">
+    <dialog id="route-picker" class="settings-dialog list-dialog route-picker" aria-labelledby="route-picker-title" aria-describedby="route-picker-identity">
       <h2 id="route-picker-title" data-i18n="ui.edit_api_key_routing_rules">Edit API key routing rules</h2>
-      <p id="route-picker-identity" class="route-picker-identity mask-blur"></p>
+      <p id="route-picker-identity" class="mask-blur"></p>
       <div id="route-picker-notice" class="editor-state notice hidden"></div>
       <div class="route-form-toolbar">
         <input id="route-picker-search" type="search" placeholder="Search routing rules, upstream credentials, or models" aria-label="Search routing rules, upstream credentials, or models" autocomplete="off"  data-i18n-placeholder="ui.search_routing_rules_upstream_credentials_or_models" data-i18n-aria-label="ui.search_routing_rules_upstream_credentials_or_models"/>
@@ -581,6 +596,7 @@
       /*core.js*/
       /*format.js*/
       /*components.js*/
+      /*sortable.js*/
       /*data.js*/
       /*time-range.js*/
       /*model-usage.js*/
@@ -591,6 +607,8 @@
       /*prices.js*/
       /*analysis.js*/
       /*events.js*/
+      /*request-events.js*/
+      /*error-events.js*/
       /*logs.js*/
       /*auth-files.js*/
       /*ai-providers.js*/
