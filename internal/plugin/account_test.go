@@ -390,7 +390,7 @@ func TestAccountRoutingAndPricesRespectItsScope(t *testing.T) {
 		access.Models[0] != "gpt-5.5" || access.Models[1] != "missing-model" {
 		t.Fatalf("route access = %+v", access)
 	}
-	if !access.RoutingValid || len(access.Credentials) != 1 || access.Credentials[0].Name != "user@example.com" {
+	if len(access.Credentials) != 1 || access.Credentials[0].Name != "user@example.com" {
 		t.Fatalf("credential access = %+v", access)
 	}
 	if strings.Contains(string(response.Body), `"bindings"`) || strings.Contains(string(response.Body), `"kind"`) {
@@ -409,7 +409,7 @@ func TestAccountRoutingAndPricesRespectItsScope(t *testing.T) {
 		if err := json.Unmarshal(response.Body, &access); err != nil {
 			t.Fatal(err)
 		}
-		if !access.RoutingValid || len(access.Models) != 0 || len(access.Credentials) != 0 || len(access.DeniedModels) != 1 || len(access.DeniedCredentials) != 2 || len(access.Warnings) != 0 {
+		if len(access.Models) != 0 || len(access.Credentials) != 0 || len(access.DeniedModels) != 1 || len(access.DeniedCredentials) != 2 || len(access.Warnings) != 0 {
 			t.Fatalf("blacklist-only account: %+v", access)
 		}
 		if strings.Contains(string(response.Body), "sha256:") || strings.Contains(string(response.Body), "dummy-denied") {

@@ -17,7 +17,6 @@ type pendingRouteLog struct {
 	ModelRestricted      bool
 	ModelDenied          bool
 	CredentialRestricted bool
-	ConfigurationError   bool
 	SelectedCredentialID string
 	CredentialResult     string
 	CredentialError      string
@@ -48,7 +47,7 @@ func (a *App) beginRouteLog(requestID, scope string, decision billing.RoutingDec
 	requestID = strings.TrimSpace(requestID)
 	modelRestricted := decision.RestrictsModels()
 	credentialRestricted := decision.RestrictsCredentials()
-	if requestID == "" || (!modelRestricted && !credentialRestricted && decision.ConfigurationError == "") {
+	if requestID == "" || (!modelRestricted && !credentialRestricted) {
 		return
 	}
 	keyDescription := boundedLogValue(a.store.KeyDescription(scope), 256)
@@ -74,7 +73,6 @@ func (a *App) beginRouteLog(requestID, scope string, decision billing.RoutingDec
 		Model: boundedLogValue(decision.Model, 512), ModelRestricted: modelRestricted,
 		ModelDenied:          modelRestricted && !decision.AllowsModel(),
 		CredentialRestricted: credentialRestricted,
-		ConfigurationError:   decision.ConfigurationError != "",
 	}
 }
 
@@ -100,9 +98,7 @@ func (a *App) observeRouteCredential(req RequestInterceptRequest, result, detail
 	pending.SelectedCredentialID = credentialID
 	pending.CredentialResult = result
 	pending.CredentialError = boundedLogValue(detail, 512)
-	if result != "configuration_error" {
-		pending.CredentialRestricted = result != "unrestricted"
-	}
+	pending.CredentialRestricted = result != "unrestricted"
 	a.pending[requestID] = pending
 }
 
@@ -120,18 +116,14 @@ func (a *App) finishRouteLog(completion RequestCompletion) {
 	if pending.ModelRestricted {
 		row["model_policy"] = "restricted"
 	}
-	if pending.ConfigurationError {
-		row["model_result"] = "configuration_error"
-	} else if pending.ModelDenied {
+	if pending.ModelDenied {
 		row["model_result"] = "deny"
 	}
 	if pending.CredentialRestricted {
 		row["credential_policy"] = "restricted"
 		row["credential_result"] = "not_observed"
 	}
-	if pending.ConfigurationError || pending.CredentialResult == "configuration_error" {
-		row["credential_result"] = "configuration_error"
-	} else if pending.ModelDenied {
+	if pending.ModelDenied {
 		row["credential_result"] = "not_reached"
 	} else if pending.CredentialRestricted {
 		if pending.CredentialResult != "" {
@@ -165,7 +157,7 @@ func (a *App) finishRouteLog(completion RequestCompletion) {
 	}
 	level := billing.PluginLogDebug
 	switch row["credential_result"] {
-	case "deny", "unverified", "configuration_error", routeNoCredential.result:
+	case "deny", "unverified", routeNoCredential.result:
 		level = billing.PluginLogError
 	case routeUnavailable.result, routeNoMatch.result:
 		level = billing.PluginLogInfo

@@ -237,7 +237,7 @@ func (a *App) resolveAuthFile(req ManagementRequest, access viewAccess) (*hostAu
 	}
 	if access.APIKey {
 		decision := a.store.ResolveRouting(access.Scope, "", "")
-		if decision.ConfigurationError != "" || (decision.RestrictsCredentials() && !routingAllowsAuthFile(*selected, decision)) {
+		if decision.RestrictsCredentials() && !routingAllowsAuthFile(*selected, decision) {
 			return nil, viewJSONError(access, http.StatusNotFound, "not_found", "Auth file does not exist")
 		}
 	}
@@ -251,9 +251,7 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 	}
 	if access.APIKey {
 		decision := a.store.ResolveRouting(access.Scope, "", "")
-		if decision.ConfigurationError != "" {
-			files = nil
-		} else if decision.RestrictsCredentials() {
+		if decision.RestrictsCredentials() {
 			filtered := files[:0]
 			for _, file := range files {
 				if routingAllowsAuthFile(file, decision) {
@@ -373,7 +371,7 @@ func codexCreditBalance(value any) string {
 }
 
 func (a *App) listHostAuthFiles() ([]hostAuthFile, error) {
-	if a == nil || a.hostCaller == nil {
+	if a.hostCaller == nil {
 		return nil, messages.Errorf("This CLIProxyAPI version does not support reading auth files")
 	}
 	raw, errCall := a.hostCaller(hostAuthList, map[string]any{})

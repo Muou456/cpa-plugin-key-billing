@@ -44,9 +44,7 @@ function renderAccountModels() {
   const models = (
     access.catalog_filtered
       ? directory
-      : access.routing_valid === false
-        ? []
-        : !modelScope.size ? directory : directory.length ? directory.filter((model) => modelScope.has(model.toLowerCase())) : access.models
+      : !modelScope.size ? directory : directory.length ? directory.filter((model) => modelScope.has(model.toLowerCase())) : access.models
   )
     .filter((model) => !deniedModels.has(model.toLowerCase()))
     .slice()
@@ -62,7 +60,6 @@ function renderAccountRouting() {
 }
 
 function renderAccountAccess(access) {
-  const routingValid = access.routing_valid !== false;
   const accountCredentialLabel = (item, state) => {
     const name = window.billingI18n.serverMessage(item.name_message, item.name);
     return {
@@ -84,12 +81,12 @@ function renderAccountAccess(access) {
   }));
   const allModels =
     access.credentials.length || access.denied_credentials.length ? m("ui.all_models_within_credential_access") : m("ui.all_models");
-  if (!modelItems.length) modelItems.push({ text: routingValid ? allModels : m("ui.unknown"), iconName: "astroid" });
+  if (!modelItems.length) modelItems.push({ text: allModels, iconName: "astroid" });
   for (const text of access.denied_models || [])
     if (!access.models.some((model) => model.toLowerCase() === text.toLowerCase()))
       modelItems.push({ text, state: "deny", iconName: "astroid" });
   const credentialItems = access.credentials.map((item) => accountCredentialLabel(item, "allow"));
-  if (!credentialItems.length) credentialItems.push({ text: routingValid ? m("ui.all_credentials") : m("ui.unknown") });
+  if (!credentialItems.length) credentialItems.push({ text: m("ui.all_credentials") });
   const credentialKey = (item) => JSON.stringify([item.source, item.provider, !!item.provider_wide, item.name]);
   const deniedCredentials = new Set(access.credentials.filter((item) => item.denied).map(credentialKey));
   for (const item of access.denied_credentials || []) {

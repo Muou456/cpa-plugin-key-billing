@@ -8,6 +8,7 @@ function editKeyRoutes(view) {
     keyRouteSelection = {
       scope: view.scope,
       routeIDs: new Set(key.route_bindings.route_ids),
+      routeNames: key.route_names,
       ...routingEditorState(key.route_bindings, "route-picker-enabled-only")
     };
     $("route-picker-search").value = "";
@@ -60,9 +61,10 @@ function renderRouteRuleList() {
 function routingChoiceGroups(selection, data, term) {
   const groups = [];
   if (selection.routeIDs) {
-    const routes = data.routes.map((route) => ({ id: route.id, name: route.name || route.id }));
+    const routes = data.routes.slice();
+    // The route list is a separate read; a binding it missed still carries its name on the key.
     for (const id of selection.routeIDs) {
-      if (!routes.some((route) => route.id === id)) routes.push({ id, name: m("ui.routing_rule_no_longer_exists_value", { v0: id }) });
+      if (!routes.some((route) => route.id === id)) routes.push({ id, name: selection.routeNames[id] });
     }
     const choices = routes.filter((route) => matchesTerm(route.name, term))
       .map((route) => ({ kind: "route", value: route.id, label: route.name }));
@@ -219,14 +221,13 @@ function renderRoutes() {
         if (items.length && !items.some((item) => item.state === "allow")) items.unshift({ text: fallback, iconName });
         return settingsEntryField(label, settingsChipList(items, fallback));
       });
-      const name = route.name || route.id;
       return settingsCard(
-        name,
+        route.name,
         [...fields, boundKeyField(boundKeys)],
         () => editRoute(route),
         () =>
           openActionDialog(
-            m("ui.delete_routing_rule_value", { v0: name }),
+            m("ui.delete_routing_rule_value", { v0: route.name }),
             boundKeys.length
               ? m("ui.remove_this_rule_from_value_of_these_value_non_deleted_keys_will_have_unrestricted_mo", {
                   v0: bindingSummary(boundKeys),

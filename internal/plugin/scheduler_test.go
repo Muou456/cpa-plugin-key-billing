@@ -271,24 +271,6 @@ func TestRejectedModelLogsCredentialStageAsNotReached(t *testing.T) {
 	}
 }
 
-func TestRoutingConfigurationErrorIsExplicitInCombinedLog(t *testing.T) {
-	app := newConfiguredApp(t)
-	app.beginRouteLog("config-error", "scope", billing.RoutingDecision{Model: "gpt-5.6", ConfigurationError: "missing route"})
-	app.finishRouteLog(RequestCompletion{RequestID: "config-error", Outcome: "rejected", StatusCode: 503})
-
-	page, err := app.store.PluginLogsPage(billing.PluginLogQuery{Levels: []billing.PluginLogLevel{billing.PluginLogError}, Limit: 10})
-	if err != nil || len(page.Entries) != 1 {
-		t.Fatalf("entries=%+v err=%v", page.Entries, err)
-	}
-	var row map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(page.Entries[0].Message, "route ")), &row); err != nil {
-		t.Fatal(err)
-	}
-	if row["model_result"] != "configuration_error" || row["credential_result"] != "configuration_error" {
-		t.Fatalf("row=%+v", row)
-	}
-}
-
 func TestRoutingDebugLogMasksSecretLikeLabelsAndModels(t *testing.T) {
 	const secret = "sk-super-secret-value-123456"
 	app, scope := configuredRoutingApp(t, billing.RouteRule{Models: []string{secret}})

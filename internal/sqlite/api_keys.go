@@ -93,6 +93,9 @@ func (d *DB) loadKeys(state *billing.State) error {
 			return fmt.Errorf("Read routing bindings for API key %s: %w", scope, errDecode)
 		}
 		normalizedBindings, errBindings := billing.NormalizeRouteBindings(key.RouteBindings)
+		if errBindings == nil {
+			errBindings = state.ValidateRouteBindings(normalizedBindings)
+		}
 		if errBindings != nil {
 			return fmt.Errorf("Validate routing bindings for API key %s: %w", scope, errBindings)
 		}

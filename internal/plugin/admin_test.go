@@ -582,7 +582,7 @@ func TestConfigCredentialSyncSurvivesRestartAndRollsBack(t *testing.T) {
 	}
 	response := callManagement(t, app, http.MethodPost, routeCredentialsSync, nil, map[string]any{"credentials": []map[string]any{
 		{"ref": ref, "provider": "codex", "display_name": rawKey},
-		{"ref": removed, "provider": "codex", "display_name": "未配置 API Key", "disabled": true},
+		{"ref": removed, "provider": "codex", "display_name": "", "disabled": true},
 	}})
 	if response.StatusCode != http.StatusOK || strings.Contains(string(response.Body), rawKey) {
 		t.Fatalf("sync response = %+v", response)
@@ -606,7 +606,7 @@ func TestConfigCredentialSyncSurvivesRestartAndRollsBack(t *testing.T) {
 	response = callAccount(t, app, routeRouting, accountTestKeyA, nil)
 	var routing accountRoutingResponse
 	if err := json.Unmarshal(response.Body, &routing); err != nil || response.StatusCode != http.StatusOK ||
-		!routing.RoutingValid || len(routing.Credentials) != 1 || routing.Credentials[0].Name != billing.PreviewKey(rawKey) ||
+		len(routing.Credentials) != 1 || routing.Credentials[0].Name != billing.PreviewKey(rawKey) ||
 		routing.Credentials[0].Status != "active" || len(routing.Warnings) != 0 {
 		t.Fatalf("routing after restart = %+v, response = %+v, err = %v", routing, response, err)
 	}

@@ -113,6 +113,12 @@ func TestRepositoryRoundTrip(t *testing.T) {
 			if after := mustLoad(t, reopened); !reflect.DeepEqual(after.State, state) {
 				t.Fatal("routing rewrite changed existing data")
 			}
+			if _, err := reopened.db.Exec("DELETE FROM routes"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := reopened.Load(time.Time{}, time.Time{}); err == nil {
+				t.Fatal("loaded a binding to a missing routing rule")
+			}
 		})
 	}
 }

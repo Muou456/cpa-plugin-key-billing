@@ -80,12 +80,7 @@ function renderPluginLogMessage(pluginLog) {
   if (!message.startsWith("route ")) return el("div", { class: "plugin-log-message" }, message);
   try {
     const row = JSON.parse(message.slice(6));
-    const model =
-      row.model_result === "deny"
-        ? m("ui.denied")
-        : row.model_result === "configuration_error"
-          ? m("ui.configuration_error")
-          : row.model_result === "allow" ? m("ui.allowed") : m("ui.unknown_2");
+    const model = row.model_result === "deny" ? m("ui.denied") : row.model_result === "allow" ? m("ui.allowed") : m("ui.unknown_2");
     const check = {
       allow: { label: m("ui.credential_route_check_passed"), class: "tag ok" },
       deny: { label: m("ui.credential_route_check_denied"), class: "tag bad" },
@@ -99,7 +94,6 @@ function renderPluginLogMessage(pluginLog) {
         no_match: m("ui.upstream_credential_no_available_match"),
         not_reached: m("ui.upstream_credential_selection_not_reached"),
         not_observed: m("ui.upstream_credential_selection_not_observed"),
-        configuration_error: m("ui.upstream_credential_configuration_error"),
         unrestricted: m("ui.upstream_credential_unrestricted")
       }[row.credential_result] || upstreamCredentialText(row.selected_credential);
     const outcome =

@@ -229,10 +229,7 @@ function renderKeys() {
 
 function renderKeyRoutes(view) {
   const bindings = view.route_bindings;
-  const names = bindings.route_ids.map((id) => ({
-    iconName: "route",
-    text: view.route_names[id] || (Object.hasOwn(view.route_names, id) ? id : m("ui.routing_rule_no_longer_exists"))
-  }))
+  const names = bindings.route_ids.map((id) => ({ iconName: "route", text: view.route_names[id] }))
     .concat(routingDimensionChips(bindings, "credential", view.credential_labels))
     .concat(routingDimensionChips(bindings, "model", view.credential_labels));
   const disabled = !!view.deleted_at || adminUIState.keySubmissions.has(view.scope);

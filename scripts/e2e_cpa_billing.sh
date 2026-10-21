@@ -699,7 +699,7 @@ assert_route_blacklist_policy() {
     fi
   done
   account_call "$port" "/v0/resource/plugins/cpa-key-billing/routing" >"$runtime_dir/blacklist-account.json"
-  if ! jq -e '.models == ["gpt-5.6-sol"] and .denied_models == ["gpt-5.6-sol"] and .routing_valid == true' "$runtime_dir/blacklist-account.json" >/dev/null; then
+  if ! jq -e '.models == ["gpt-5.6-sol"] and .denied_models == ["gpt-5.6-sol"]' "$runtime_dir/blacklist-account.json" >/dev/null; then
     echo "账户权限没有保留黑白名单冲突语义。" >&2
     return 1
   fi
@@ -1551,7 +1551,7 @@ run_target() {
       (has("routing") | not) and (has("bindings") | not)
     ' "$account_access_file" >/dev/null ||
     ! jq -e 'has("subscription") and has("concurrency") and (has("credentials") | not)' "$runtime_dir/account-subscription.json" >/dev/null ||
-    ! jq -e '(.models | length) == 0 and (.credentials | length) == 0 and .routing_valid == true and (.warnings | length) == 0' "$runtime_dir/account-routing.json" >/dev/null ||
+    ! jq -e '(.models | length) == 0 and (.credentials | length) == 0 and (.warnings | length) == 0' "$runtime_dir/account-routing.json" >/dev/null ||
     ! jq -e 'length > 0 and all(.[]; has("model_id") and has("source") and (has("operation") | not))' \
       "$account_prices_file" >/dev/null ||
     ! jq -e --argjson expected "$expected_requests" '

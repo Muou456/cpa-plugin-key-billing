@@ -196,11 +196,8 @@ func TestManagementRejectsLookalikeRoutePrefixes(t *testing.T) {
 func TestHandleMethodRecoversFromPanic(t *testing.T) {
 	app := newTestApp(t)
 	t.Cleanup(app.Shutdown)
-	app.store = nil
-	_, errHandle := app.HandleMethod(MethodManagementHandle, mustMarshal(t, ManagementRequest{
-		Method: http.MethodGet,
-		Path:   managementBase + routeKeys,
-	}))
+	app.admissions = nil
+	_, errHandle := app.HandleMethod(MethodRequestInterceptBefore, mustMarshal(t, RequestInterceptRequest{RequestID: "panic"}))
 	if errHandle == nil {
 		t.Fatal("a panicking handler returned no error")
 	}

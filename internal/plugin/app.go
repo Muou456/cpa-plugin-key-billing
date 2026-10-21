@@ -62,9 +62,7 @@ func (a *App) HandleMethod(method string, request []byte) (response []byte, err 
 		if recovered := recover(); recovered != nil {
 			response = nil
 			err = fmt.Errorf("Plugin call %s panicked: %v", method, recovered)
-			if a != nil && a.store != nil {
-				a.store.AddPluginLog(billing.PluginLogError, "%v", err)
-			}
+			a.store.AddPluginLog(billing.PluginLogError, "%v", err)
 		}
 	}()
 	return a.handleMethod(method, request)
@@ -106,9 +104,6 @@ func (a *App) handleMethod(method string, request []byte) ([]byte, error) {
 }
 
 func (a *App) Shutdown() {
-	if a == nil || a.store == nil {
-		return
-	}
 	a.store.Close()
 }
 

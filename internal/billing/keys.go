@@ -14,11 +14,12 @@ type KeyView struct {
 	InConfig  bool      `json:"in_config"`
 	DeletedAt time.Time `json:"deleted_at,omitzero"`
 
-	PlanID             string        `json:"plan_id,omitempty"`
-	PlanName           string        `json:"plan_name,omitempty"`
-	ConcurrencyLimit   int           `json:"concurrency_limit"`
-	CurrentConcurrency int           `json:"current_concurrency"`
-	RouteBindings      RouteBindings `json:"route_bindings"`
+	PlanID             string            `json:"plan_id,omitempty"`
+	PlanName           string            `json:"plan_name,omitempty"`
+	ConcurrencyLimit   int               `json:"concurrency_limit"`
+	CurrentConcurrency int               `json:"current_concurrency"`
+	RouteBindings      RouteBindings     `json:"route_bindings"`
+	RouteNames         map[string]string `json:"route_names"`
 	QuotaView
 }
 
@@ -27,26 +28,28 @@ func (s *Store) KeyViews() []KeyView {
 	now := s.Now()
 	return updateResult(s, func(state *State) ([]KeyView, Changes) {
 		var settled []string
-		plans := make(map[string]Plan, len(state.Plans))
-		for _, plan := range state.Plans {
-			plans[plan.ID] = plan
-		}
 		views := make([]KeyView, 0, len(state.Keys))
 		for scope, key := range state.Keys {
 			if key == nil {
 				continue
 			}
-			if key.DeletedAt.IsZero() && settleKeyPlan(key, plans[key.PlanID], now) {
+			if key.DeletedAt.IsZero() && settleExpiredCycles(key, now) {
 				settled = append(settled, scope)
 			}
-			views = append(views, keyView(scope, key, plans[key.PlanID], s.activeByScope[scope], now))
+			views = append(views, keyView(state, scope, key, s.activeByScope[scope], now))
 		}
 		sortKeyViews(views, s.configOrder)
 		return views, Changes{Keys: settled}
 	})
 }
 
-func keyView(scope string, key *KeyState, plan Plan, currentConcurrency int, now time.Time) KeyView {
+func keyView(state *State, scope string, key *KeyState, currentConcurrency int, now time.Time) KeyView {
+	plan, _ := state.FindPlan(key.PlanID)
+	routeNames := make(map[string]string, len(key.RouteBindings.RouteIDs))
+	for _, id := range key.RouteBindings.RouteIDs {
+		route, _ := state.findRoute(id)
+		routeNames[id] = route.Name
+	}
 	return KeyView{
 		Scope:              scope,
 		Preview:            key.Preview,
@@ -59,19 +62,8 @@ func keyView(scope string, key *KeyState, plan Plan, currentConcurrency int, now
 		ConcurrencyLimit:   key.ConcurrencyLimit,
 		CurrentConcurrency: currentConcurrency,
 		RouteBindings:      key.RouteBindings.clone(),
+		RouteNames:         routeNames,
 	}
-}
-
-func settleKeyPlan(key *KeyState, plan Plan, now time.Time) bool {
-	if key.PlanID == "" {
-		return false
-	}
-	if plan.ID == key.PlanID {
-		return settleExpiredCycles(key, now)
-	}
-	key.PlanID = ""
-	key.Cycles = nil
-	return true
 }
 
 func (s *Store) KeyViewForScope(scope string) (KeyView, bool) {
@@ -88,13 +80,12 @@ func (s *Store) KeyViewForScope(scope string) (KeyView, bool) {
 		if key == nil || !key.DeletedAt.IsZero() {
 			return result{}, Changes{}
 		}
-		plan, _ := state.FindPlan(key.PlanID)
 		now := s.Now()
 		changed := Changes{}
-		if settleKeyPlan(key, plan, now) {
+		if settleExpiredCycles(key, now) {
 			changed.Keys = []string{scope}
 		}
-		return result{view: keyView(scope, key, plan, s.activeByScope[scope], now), ok: true}, changed
+		return result{view: keyView(state, scope, key, s.activeByScope[scope], now), ok: true}, changed
 	})
 	return current.view, current.ok
 }

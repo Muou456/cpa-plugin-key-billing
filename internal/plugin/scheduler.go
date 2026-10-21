@@ -271,7 +271,7 @@ func (a *App) pickCredential(raw []byte) ([]byte, error) {
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return nil, fmt.Errorf("Parse upstream credential scheduling parameters: %w", err)
 	}
-	if a == nil || a.store == nil || !a.store.Enabled() {
+	if !a.store.Enabled() {
 		return OKEnvelope(SchedulerPickResponse{Handled: false})
 	}
 	if metadataString(req.Options.Metadata, MetadataSource) == SourcePluginHostModelCallback {
@@ -287,9 +287,6 @@ func (a *App) pickCredential(raw []byte) ([]byte, error) {
 		requestedModel = req.Model
 	}
 	decision := a.store.ResolveRouting(scope, req.Model, requestedModel)
-	if decision.ConfigurationError != "" {
-		return ErrorEnvelope("routing_configuration_error", decision.ConfigurationError, http.StatusServiceUnavailable), nil
-	}
 	if !decision.RestrictsCredentials() {
 		return OKEnvelope(SchedulerPickResponse{Handled: false})
 	}

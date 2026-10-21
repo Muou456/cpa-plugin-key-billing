@@ -26,12 +26,8 @@ func (s *Store) Authorize(scope string, at time.Time) Decision {
 		if key == nil || key.PlanID == "" {
 			return allowed, Changes{}
 		}
+		plan, _ := state.FindPlan(key.PlanID)
 		touched := Changes{Keys: []string{scope}}
-		plan, ok := state.FindPlan(key.PlanID)
-		if !ok {
-			key.PlanID, key.Cycles = "", nil
-			return allowed, touched
-		}
 		var changed Changes
 		if settleExpiredCycles(key, at) {
 			changed = touched

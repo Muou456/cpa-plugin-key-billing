@@ -180,7 +180,6 @@ On CLIProxyAPI 8.0.37 or later, the model list an API key receives contains only
 | The credentials the routing rules allow do not serve the model, or none is available | `503` | `server_error` | `internal_server_error` |
 | The selected credential violates the routing rules | `503` | `server_error` | `routing_credential_mismatch` |
 | The selected credential's routing permissions cannot be verified | `503` | `server_error` | `routing_credential_unverified` |
-| A bound routing rule is missing or invalid | `503` | `server_error` | `routing_configuration_error` |
 | Model has no price | `503` | `cpa_key_billing_error` | `model_price_error` |
 
 ## Acknowledgments

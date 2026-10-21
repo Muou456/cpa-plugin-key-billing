@@ -259,10 +259,6 @@
       "%q"
     ]
   },
-  "The routing rule no longer exists; contact your administrator": {
-    "key": "backend.the_routing_rule_no_longer_exists_contact_your_administrator",
-    "formats": []
-  },
   "Failed to load upstream credentials": {
     "key": "backend.failed_to_load_upstream_credentials",
     "formats": []

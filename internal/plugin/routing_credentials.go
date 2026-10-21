@@ -347,13 +347,8 @@ func (a *App) syncConfiguredCredentials(req ManagementRequest) ManagementRespons
 		if !billing.ValidCredentialFingerprint(ref) || provider == "" || len(provider) > 160 || cleanText(provider) != provider {
 			return JSONError(http.StatusBadRequest, "invalid", "Invalid configured credential identifier")
 		}
-		preview := cleanText(item.DisplayName)
-		// Accept the old UI sentinel during upgrades; new clients send an empty value.
-		if preview == "No API key configured" || preview == "未配置 API Key" {
-			preview = ""
-		}
 		next[ref] = billing.ConfigCredential{
-			Provider: provider, KeyPreview: billing.PreviewKey(preview), Disabled: item.Disabled,
+			Provider: provider, KeyPreview: billing.PreviewKey(cleanText(item.DisplayName)), Disabled: item.Disabled,
 		}
 	}
 

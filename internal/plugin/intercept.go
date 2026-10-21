@@ -135,9 +135,6 @@ func (a *App) interceptBeforeAuth(raw []byte) ([]byte, error) {
 	if errUnmarshal := json.Unmarshal(raw, &req); errUnmarshal != nil {
 		return nil, fmt.Errorf("Parse request interception parameters: %w", errUnmarshal)
 	}
-	if a == nil || a.store == nil {
-		return OKEnvelope(RequestInterceptResponse{})
-	}
 	helper := metadataString(req.Metadata, MetadataSource) == SourcePluginHostModelCallback
 	var admission *requestAdmission
 	if !helper {
@@ -155,9 +152,6 @@ func (a *App) interceptBeforeAuth(raw []byte) ([]byte, error) {
 		a.rememberRequestOrigin(req, scope, endpoint)
 		routing := a.store.ResolveRouting(scope, req.Model, req.RequestedModel)
 		a.beginRouteLog(req.RequestID, scope, routing)
-		if routing.ConfigurationError != "" {
-			return OKEnvelope(routingErrorResponse(req.SourceFormat, "routing_configuration_error", routing.ConfigurationError))
-		}
 		if routing.RestrictsModels() && !routing.AllowsModel() {
 			return OKEnvelope(modelForbiddenResponse(req.SourceFormat, routing))
 		}
@@ -220,9 +214,6 @@ func (a *App) interceptAfterAuth(raw []byte) ([]byte, error) {
 	if errUnmarshal := json.Unmarshal(raw, &req); errUnmarshal != nil {
 		return nil, fmt.Errorf("Parse post-auth request interception parameters: %w", errUnmarshal)
 	}
-	if a == nil || a.store == nil {
-		return OKEnvelope(RequestInterceptResponse{})
-	}
 	result, detail := "unrestricted", ""
 	var response RequestInterceptResponse
 	if a.store.Enabled() && metadataString(req.Metadata, MetadataSource) != SourcePluginHostModelCallback {
@@ -231,10 +222,7 @@ func (a *App) interceptAfterAuth(raw []byte) ([]byte, error) {
 		scope := metadataString(req.Metadata, MetadataCallerScope)
 		decision := a.store.ResolveRouting(scope, req.Model, req.RequestedModel)
 		a.beginRouteLog(req.RequestID, scope, decision)
-		if decision.ConfigurationError != "" {
-			result, detail = "configuration_error", decision.ConfigurationError
-			response = routingErrorResponse(req.SourceFormat, "routing_configuration_error", detail)
-		} else if decision.RestrictsCredentials() {
+		if decision.RestrictsCredentials() {
 			allowed, err := a.selectedCredentialAllowed(req, decision)
 			switch {
 			case err != nil:
@@ -257,17 +245,15 @@ func (a *App) completeRequest(raw []byte) ([]byte, error) {
 	if errUnmarshal := json.Unmarshal(raw, &completion); errUnmarshal != nil {
 		return nil, fmt.Errorf("Parse request completion event: %w", errUnmarshal)
 	}
-	if a != nil && a.store != nil {
-		func() {
-			a.admissionsMu.Lock()
-			defer a.admissionsMu.Unlock()
-			if admission := a.admissions[strings.TrimSpace(completion.RequestID)]; admission != nil {
-				admission.completed = true
-			}
-			a.store.ReleaseSlot(completion.RequestID)
-		}()
-		a.finishRouteLog(completion)
-	}
+	func() {
+		a.admissionsMu.Lock()
+		defer a.admissionsMu.Unlock()
+		if admission := a.admissions[strings.TrimSpace(completion.RequestID)]; admission != nil {
+			admission.completed = true
+		}
+		a.store.ReleaseSlot(completion.RequestID)
+	}()
+	a.finishRouteLog(completion)
 	return OKEnvelope(struct{}{})
 }
 
@@ -280,7 +266,7 @@ func (a *App) handleUsage(raw []byte) ([]byte, error) {
 	if errUnmarshal := json.Unmarshal(raw, &record); errUnmarshal != nil {
 		return nil, fmt.Errorf("Parse usage record: %w", errUnmarshal)
 	}
-	if a == nil || a.store == nil || !a.store.Enabled() {
+	if !a.store.Enabled() {
 		return OKEnvelope(struct{}{})
 	}
 	scope := billing.CallerScope(record.APIKey)

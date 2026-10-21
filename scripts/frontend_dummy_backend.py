@@ -1226,7 +1226,7 @@ def account_routing_view(index):
         "credentials": [credential_view(item) for item in CREDENTIALS if item["ref"] in refs or (item["source"], item["provider"]) in providers],
         "denied_credentials": [credential_view(item) for item in CREDENTIALS if item["ref"] in denied_refs] +
             [{"source": source, "provider": provider, "provider_wide": True, "denied": True} for source, provider in sorted(denied_providers)],
-        "routing_valid": True, "catalog_filtered": True, "warnings": [],
+        "catalog_filtered": True, "warnings": [],
     }
 
 
