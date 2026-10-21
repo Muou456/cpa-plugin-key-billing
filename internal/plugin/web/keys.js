@@ -1,16 +1,19 @@
 const CONCURRENCY_OPTIONS = [0, 1, 2, 3, 5, 10, 20, 50];
 const CUSTOM_CONCURRENCY = "__custom__";
+const CALLER_SCOPE_SALT = "cli-proxy-api:caller-scope:v1\u0000";
+
+function callerScope(key) { return sha256Hex(CALLER_SCOPE_SALT + key.trim()); }
+
+// A complete API key finds its row through its scope.
+const keySearch = { term: "", scope: "" };
 
 async function copyAPIKey(button, view) {
   button.disabled = true;
   try {
-    const keys = await fetchConfiguredAPIKeys();
     let key = "";
-    for (const value of keys) {
-      const candidate = value.trim();
-      const scope = await sha256Hex(CALLER_SCOPE_SALT + candidate);
-      if (scope === view.scope) {
-        key = candidate;
+    for (const value of await fetchConfiguredAPIKeys()) {
+      if ((await callerScope(value)) === view.scope) {
+        key = value.trim();
         break;
       }
     }
@@ -55,9 +58,13 @@ function renderKeys() {
   closeHoverTooltip();
   if (renderDataPending($("keys-body"), [resources.admin.keys], m("ui.loading"), "empty section-loading")) return;
   const plans = resources.admin.plans.value;
-  const filter = $("key-filter").value.trim().toLowerCase();
-  const keys = resources.admin.keys.value.filter((key) => !key.deleted_at || $("keys-include-deleted").checked)
-    .filter((view) => matchesTerm([apiKeyIdentity(view).text, view.plan_name, view.scope].filter(Boolean).join(" "), filter));
+  const term = $("key-filter").value.trim();
+  const scope = keySearch.term === term ? keySearch.scope : "";
+  const keys = resources.admin.keys.value.filter(
+    (view) =>
+      (!view.deleted_at || $("keys-include-deleted").checked) &&
+      (view.scope === scope || matchesTerm([apiKeyIdentity(view).text, view.plan_name, view.scope].filter(Boolean).join(" "), term))
+  );
   renderCollection($("keys-body"), keys, {
     headers: [
       "API Key",
@@ -291,7 +298,7 @@ async function importPanelLabels(load) {
   const scopes = new Map();
   for (const key of keys) {
     const value = key.trim();
-    if (value) scopes.set(await fingerprint(value), await sha256Hex(CALLER_SCOPE_SALT + value));
+    if (value) scopes.set(await fingerprint(value), await callerScope(value));
   }
   if (generation !== sessionGeneration) throw new StaleRequestError();
   let imported = 0;
@@ -347,7 +354,13 @@ function cpamcLabels() {
   return { labels, fingerprint: (key) => sha256Hex(JSON.stringify(["api-key-name", apiBase, key])) };
 }
 
-$("key-filter").addEventListener("input", renderKeys);
+$("key-filter").addEventListener("input", async () => {
+  const term = $("key-filter").value.trim();
+  const scope = await callerScope(term);
+  if ($("key-filter").value.trim() !== term) return;
+  Object.assign(keySearch, { term, scope });
+  renderKeys();
+});
 $("keys-include-deleted").addEventListener("change", () => {
   saveChoice("admin", "keys-include-deleted");
   renderKeys();
