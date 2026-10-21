@@ -17,7 +17,6 @@ const AI_BALANCE_UPSTREAMS = [
     async read(call) {
       const body = await call("/user/balance");
       return requireArray(body.balance_infos, m("ui.balance")).map((info) => ({
-        label: "ui.balance",
         currency: balanceCurrency(requireObject(info, m("ui.balance")).currency),
         amount: balanceAmount(info.total_balance),
         depleted: body.is_available === false,
@@ -38,19 +37,20 @@ const AI_BALANCE_UPSTREAMS = [
       ]);
       const data = requireObject(credits.data, m("ui.balance"));
       const total = balanceAmount(data.total_credits), used = balanceAmount(data.total_usage);
-      const balances = [{ label: "ui.account_credits", currency: "USD", amount: total - used, used, total, depleted: total - used <= 0 }];
       const limit = key?.data;
-      if (Number.isFinite(limit?.limit) && Number.isFinite(limit?.limit_remaining)) {
-        balances.push({
-          label: "ui.key_limit",
+      const limited = Number.isFinite(limit?.limit) && Number.isFinite(limit?.limit_remaining);
+      return [
+        {
           currency: "USD",
-          amount: limit.limit_remaining,
-          used: limit.limit - limit.limit_remaining,
-          total: limit.limit,
-          depleted: limit.limit_remaining <= 0
-        });
-      }
-      return balances;
+          amount: total - used,
+          // A spent key limit stops the key while the account still has credits.
+          depleted: total - used <= 0 || (limited && limit.limit_remaining <= 0),
+          parts: [
+            ["ui.balance_used_value", used, total],
+            ...(limited ? [["ui.key_limit_used_value", limit.limit - limit.limit_remaining, limit.limit]] : [])
+          ]
+        }
+      ];
     }
   },
   {
@@ -60,7 +60,6 @@ const AI_BALANCE_UPSTREAMS = [
       const amount = balanceAmount(data.available_balance);
       return [
         {
-          label: "ui.balance",
           currency: host.endsWith(".cn") ? "CNY" : "USD",
           amount,
           depleted: amount <= 0,
@@ -76,7 +75,6 @@ const AI_BALANCE_UPSTREAMS = [
       const amount = balanceAmount(data.totalBalance);
       return [
         {
-          label: "ui.balance",
           currency: host.endsWith(".cn") ? "CNY" : "USD",
           amount,
           depleted: amount <= 0,
@@ -91,9 +89,7 @@ const AI_BALANCE_UPSTREAMS = [
       const body = await call("/v1/accounts");
       const amount = balanceAmount(body.balance);
       // Postpaid accounts keep calling below zero.
-      return [
-        { label: "ui.balance", currency: host.endsWith(".com") ? "CNY" : "USD", amount, depleted: body.type !== "postpaid" && amount <= 0 }
-      ];
+      return [{ currency: host.endsWith(".com") ? "CNY" : "USD", amount, depleted: body.type !== "postpaid" && amount <= 0 }];
     }
   }
 ];
@@ -227,14 +223,12 @@ function validAIBalanceResult(result) {
     result.balances.length > 0 &&
     result.balances.every(
       (balance) =>
-        balance && typeof balance.label === "string" && typeof balance.currency === "string" && /^[A-Z]{3}$/.test(balance.currency) &&
-        Number.isFinite(balance.amount) &&
-        [balance.used, balance.total].every((value) => value === undefined || Number.isFinite(value)) &&
-        (balance.parts === undefined ||
-          (Array.isArray(balance.parts) &&
-            balance.parts.every(
-              (part) => Array.isArray(part) && part.length === 2 && typeof part[0] === "string" && Number.isFinite(part[1])
-            )))
+        typeof balance?.currency === "string" && /^[A-Z]{3}$/.test(balance.currency) && Number.isFinite(balance.amount) &&
+        Array.isArray(balance.parts) &&
+        balance.parts.every(
+          (part) =>
+            Array.isArray(part) && [2, 3].includes(part.length) && typeof part[0] === "string" && part.slice(1).every(Number.isFinite)
+        )
     )
   );
 }
@@ -305,7 +299,8 @@ async function loadAIBalance(provider) {
       fetched_at: new Date().toISOString(),
       balances: balances.map((balance) => ({
         ...balance,
-        parts: balance.parts?.filter(([, value]) => value != null).map(([label, value]) => [label, balanceAmount(value)])
+        parts: (balance.parts || []).filter(([, value]) => value != null)
+          .map(([label, ...amounts]) => [label, ...amounts.map(balanceAmount)])
       }))
     };
     if (!validAIBalanceResult(result)) throw new UIError(m("ui.invalid_response_for_value", { v0: m("ui.balance") }));
@@ -383,31 +378,17 @@ function filteredAIProviders() {
 }
 
 function renderAIBalanceRow(balance, fetchedAt) {
-  const parts = balance.parts || [];
-  const used =
-    balance.total > 0 && formatBalance(balance.used, balance.currency) + DISPLAY_SLASH + formatBalance(balance.total, balance.currency);
+  const details = [
+    ...balance.parts.map(([label, ...amounts]) =>
+      el("span", { text: m(label, { v0: amounts.map((amount) => formatBalance(amount, balance.currency)).join(DISPLAY_SLASH) }) })
+    ),
+    fetchedAt && el("time", { datetime: fetchedAt, text: m("ui.balance_queried_at_value", { v0: compactResetDate(new Date(fetchedAt)) }) })
+  ].filter(Boolean);
   return el(
     "div",
     { class: "ai-balance-row" + (balance.depleted ? " depleted" : "") },
-    el(
-      "div",
-      { class: "ai-balance-head" },
-      el("span", { class: "ai-balance-value", text: formatBalance(balance.amount, balance.currency) }),
-      balance.label !== "ui.balance" && el("span", { class: "ai-balance-label", text: m(balance.label) }),
-      fetchedAt &&
-        el("time", {
-          class: "ai-balance-time",
-          datetime: fetchedAt,
-          text: m("ui.balance_queried_at_value", { v0: compactResetDate(new Date(fetchedAt)) })
-        })
-    ),
-    (used || parts.length > 0) &&
-      el(
-        "div",
-        { class: "ai-balance-details" },
-        used && el("span", { text: used }),
-        parts.map(([key, value]) => el("span", { text: m(key, { v0: formatBalance(value, balance.currency) }) }))
-      )
+    el("span", { class: "credential-metric-value", text: formatBalance(balance.amount, balance.currency) }),
+    details.length > 0 && el("div", { class: "ai-balance-details" }, details)
   );
 }
 
@@ -431,7 +412,7 @@ function renderAIBalance(provider) {
     "div",
     { class: "ai-balance" },
     error && el("div", { class: "credential-error", text: error }),
-    result.balances.map((balance, index) => renderAIBalanceRow(balance, index === 0 ? result.fetched_at : null))
+    result.balances.map((balance, index) => renderAIBalanceRow(balance, index === result.balances.length - 1 ? result.fetched_at : null))
   );
 }
 

@@ -1294,16 +1294,21 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
 .auth-quota-row { display: grid; gap: 5px; min-width: 0; }
 .auth-quota-row.elapsed .quota-fill { opacity: 0.45; }
 .auth-quota-row.elapsed .auth-quota-value { color: var(--text-tertiary); }
-.ai-balance { display: grid; gap: 10px; min-width: 0; max-width: 380px; font-variant-numeric: tabular-nums; }
-.ai-balance-row { display: grid; gap: 4px; min-width: 0; }
-.ai-balance-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
-.ai-balance-value { color: var(--text-primary); font-size: 15px; font-weight: 600; white-space: nowrap; }
-.ai-balance-row.depleted .ai-balance-value { color: var(--failure-badge-text); }
-.ai-balance-label { color: var(--text-secondary); font-size: 11px; }
-.ai-balance-time { margin-left: auto; color: var(--text-tertiary); font-size: 11px; white-space: nowrap; }
-.ai-balance-details { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--text-secondary); font-size: 11px; }
-.ai-balance-details > span { white-space: nowrap; }
-.ai-balance-details > span + span { padding-left: 10px; border-left: 1px solid var(--border-color); }
+.ai-balance { display: grid; gap: 10px; min-width: 0; font-variant-numeric: tabular-nums; }
+.ai-balance-row { display: grid; gap: 3px; min-width: 0; }
+.ai-balance-row.depleted .credential-metric-value { color: var(--failure-badge-text); }
+/* Every detail leads with its separator; the clipped margin hides the one starting each line. */
+.ai-balance-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-left: -11px;
+  clip-path: inset(0 0 0 11px);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.ai-balance-details > * { padding-left: 10px; border-left: 1px solid var(--border-color); white-space: nowrap; }
 .auth-quota-head { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .auth-quota-label {
   flex: 1;
