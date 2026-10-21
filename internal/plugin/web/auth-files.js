@@ -917,7 +917,12 @@ function quotaPeriodRange(start, end) {
 $("auth-drawer-close").replaceChildren(actionIcon("x"));
 setLabeledActionIcon($("auth-drawer-reset"), "rotate-cw-clock", m("ui.reset_quota"));
 $("auth-drawer-close").onclick = () => $("auth-drawer").close();
-$("auth-drawer").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+// A drag between children also clicks the drawer itself, so only a press that starts on the backdrop closes it.
+let authDrawerBackdropPress = false;
+$("auth-drawer").addEventListener("pointerdown", (event) => { authDrawerBackdropPress = event.target === event.currentTarget; });
+$("auth-drawer").addEventListener("click", (event) => {
+  if (authDrawerBackdropPress && event.target === event.currentTarget) event.currentTarget.close();
+});
 $("auth-drawer").addEventListener("close", () => authDrawer.request++);
 
 for (const account of [false, true]) {

@@ -315,6 +315,8 @@ function showHoverTooltip(anchor, { point = null, source = "keyboard" } = {}) {
   if (anchor.hasAttribute("data-tip-overflow") && anchor.scrollWidth <= anchor.clientWidth + 1) return;
   if (!content?.length) return;
   const tooltip = $("hover-tooltip");
+  // A modal dialog makes the rest of the document inert, so the tooltip opens inside the anchor's dialog.
+  (anchor.closest("dialog") || document.body).append(tooltip);
   hoverTooltipAnchor = anchor;
   hoverTooltipPoint = point;
   hoverTooltipSource = source;
