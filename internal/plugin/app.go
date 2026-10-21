@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"cpa-key-billing/internal/billing"
 	"cpa-key-billing/internal/sqlite"
@@ -26,6 +27,7 @@ type App struct {
 	scheduler             subsetScheduler
 	pending               map[string]pendingRouteLog
 	pendingSequence       uint64
+	filtersModelCatalogs  atomic.Bool
 }
 
 func (a *App) SetHostCaller(caller HostCaller) {
@@ -75,13 +77,15 @@ func (a *App) handleMethod(method string, request []byte) ([]byte, error) {
 			a.store.AddPluginLog(billing.PluginLogError, "Failed to apply plugin configuration: %v", errConfigure)
 			return nil, errConfigure
 		}
-		return OKEnvelope(registration())
+		return OKEnvelope(a.registration())
 	case MethodRequestInterceptBefore:
 		return a.interceptBeforeAuth(request)
 	case MethodRequestInterceptAfter:
 		return a.interceptAfterAuth(request)
 	case MethodRequestComplete:
 		return a.completeRequest(request)
+	case MethodResponseInterceptAfter:
+		return a.interceptResponse(request)
 	case MethodSchedulerPick:
 		return a.pickCredential(request)
 	case MethodUsageHandle:
@@ -134,12 +138,13 @@ func (a *App) configure(raw []byte) error {
 	}(); errConfigure != nil {
 		return errConfigure
 	}
+	a.filtersModelCatalogs.Store(cfg.Enabled && a.probeCredentialModels())
 	// Refresh records its result; a download failure does not disable custom prices.
 	_, _ = a.store.EnsureReferencePrices()
 	return nil
 }
 
-func registration() Registration {
+func (a *App) registration() Registration {
 	defaults := billing.DefaultConfig()
 	return Registration{
 		SchemaVersion: SchemaVersion,
@@ -190,6 +195,7 @@ func registration() Registration {
 		},
 		Capabilities: Capabilities{
 			RequestInterceptor:        true,
+			ResponseInterceptor:       a.filtersModelCatalogs.Load(),
 			RequestLifecyclePlugin:    true,
 			UsagePlugin:               true,
 			ManagementAPI:             true,

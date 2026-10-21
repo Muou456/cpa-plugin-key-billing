@@ -13,21 +13,30 @@ import (
 
 func TestRegisterDeclaresExpectedCapabilities(t *testing.T) {
 	app := newConfiguredApp(t)
-	raw, errHandle := app.HandleMethod(MethodPluginReconfigure, mustMarshal(t, LifecycleRequest{
-		ConfigYAML: testConfigYAML(t, true),
-	}))
-	if errHandle != nil {
-		t.Fatalf("plugin.reconfigure error = %v", errHandle)
+	reconfigure := func(hostErr error) Registration {
+		app.SetHostCaller(func(string, any) (json.RawMessage, error) { return json.RawMessage(`{"credentials":[]}`), hostErr })
+		raw, errHandle := app.HandleMethod(MethodPluginReconfigure, mustMarshal(t, LifecycleRequest{
+			ConfigYAML: testConfigYAML(t, true),
+		}))
+		if errHandle != nil {
+			t.Fatalf("plugin.reconfigure error = %v", errHandle)
+		}
+		var registration Registration
+		decodeResult(t, raw, &registration)
+		return registration
 	}
-	var registration Registration
-	decodeResult(t, raw, &registration)
 
+	// Hosts without host.auth.models must never route responses to the plugin.
+	if reconfigure(errors.New("host_call_failed：unsupported host callback host.auth.models")).Capabilities.ResponseInterceptor {
+		t.Fatal("response_interceptor declared on a host without host.auth.models")
+	}
+	registration := reconfigure(nil)
 	// The host refuses to load a plugin declaring more than it implements.
 	if registration.SchemaVersion != SchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", registration.SchemaVersion, SchemaVersion)
 	}
 	caps := registration.Capabilities
-	if !caps.RequestInterceptor || !caps.RequestLifecyclePlugin || !caps.UsagePlugin || !caps.ManagementAPI || !caps.Scheduler || !caps.SchedulerAcrossPriorities || !caps.QuotaProvider {
+	if !caps.RequestInterceptor || !caps.ResponseInterceptor || !caps.RequestLifecyclePlugin || !caps.UsagePlugin || !caps.ManagementAPI || !caps.Scheduler || !caps.SchedulerAcrossPriorities || !caps.QuotaProvider {
 		t.Fatalf("capabilities = %+v, want every hook billing depends on", caps)
 	}
 	if registration.Metadata.Name != PluginName || registration.Metadata.Version != Version {

@@ -40,10 +40,13 @@ function renderAccountModels() {
   const directory = data.models.value;
   const modelScope = new Set(access.models.map((model) => model.toLowerCase()));
   const deniedModels = new Set((access.denied_models || []).map((model) => model.toLowerCase()));
+  // A host that filters model catalogs has already applied every rule to the key's directory.
   const models = (
-    access.routing_valid === false
-      ? []
-      : !modelScope.size ? directory : directory.length ? directory.filter((model) => modelScope.has(model.toLowerCase())) : access.models
+    access.catalog_filtered
+      ? directory
+      : access.routing_valid === false
+        ? []
+        : !modelScope.size ? directory : directory.length ? directory.filter((model) => modelScope.has(model.toLowerCase())) : access.models
   )
     .filter((model) => !deniedModels.has(model.toLowerCase()))
     .slice()
@@ -79,7 +82,9 @@ function renderAccountAccess(access) {
     state: deniedModels.has(text.toLowerCase()) ? "deny" : "allow",
     iconName: "astroid"
   }));
-  if (!modelItems.length) modelItems.push({ text: routingValid ? m("ui.all_models") : m("ui.unknown"), iconName: "astroid" });
+  const allModels =
+    access.credentials.length || access.denied_credentials.length ? m("ui.all_models_within_credential_access") : m("ui.all_models");
+  if (!modelItems.length) modelItems.push({ text: routingValid ? allModels : m("ui.unknown"), iconName: "astroid" });
   for (const text of access.denied_models || [])
     if (!access.models.some((model) => model.toLowerCase() === text.toLowerCase()))
       modelItems.push({ text, state: "deny", iconName: "astroid" });

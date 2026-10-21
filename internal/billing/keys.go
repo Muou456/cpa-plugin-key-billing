@@ -231,6 +231,20 @@ func (s *Store) SetLabel(scope, label string) error {
 	return err
 }
 
+// LiveScope returns the first scope that names a live key, or "".
+func (s *Store) LiveScope(scopes []string) string {
+	result := ""
+	s.read(func(state *State) {
+		for _, scope := range scopes {
+			if scope = normalizeScope(scope); state.liveKey(scope) != nil {
+				result = scope
+				return
+			}
+		}
+	})
+	return result
+}
+
 // Deleted keys retain their settings but cannot be rebound or reset.
 func (s *State) liveKey(scope string) *KeyState {
 	key := s.Keys[scope]

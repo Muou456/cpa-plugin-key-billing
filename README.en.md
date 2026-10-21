@@ -47,7 +47,7 @@ flowchart TB
 
 ## Requirements
 
-- CLIProxyAPI **7.3.7 or later**.
+- CLIProxyAPI **7.3.7 or later**. [Model list filtering](#model-lists) requires **8.0.37 or later**.
 - A CLIProxyAPI build with plugin support. Builds labeled `no-plugin` cannot load this plugin.
 
 ## Installation
@@ -165,6 +165,10 @@ flowchart TB
     P -- Match --> U[Call the upstream provider]
     P -- No match --> S[HTTP 503]
 ```
+
+### Model lists
+
+On CLIProxyAPI 8.0.37 or later, the model list an API key receives contains only models its routing rules allow and an allowed credential serves, so clients no longer show models they cannot call. Older CLIProxyAPI versions still return the full model list.
 
 ## Rejection responses
 

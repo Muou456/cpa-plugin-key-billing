@@ -694,6 +694,71 @@ assert_route_blacklist_policy() {
   management_call DELETE "$port" "/v0/management/plugins/cpa-key-billing/routes?id=$route" >/dev/null
 }
 
+catalog_ids() {
+  local port="$1"
+  local path="$2"
+  local filter="$3"
+  shift 3
+  curl -fsS --max-time 30 "$@" "http://127.0.0.1:$port$path" | jq -c "$filter | sort"
+}
+
+# Hosts with host.auth.models list only the models a key's routing rules let it
+# call, in every catalog format; older hosts keep the full catalog. Management
+# panels and explicit requests always see every model.
+assert_model_catalog_filter() {
+  local port="$1"
+  local filtering expected format path filter full panel filtered
+  local -a auth
+
+  filtering="$(account_call "$port" "/v0/resource/plugins/cpa-key-billing/routing" | jq -er '.catalog_filtered | if type == "boolean" then tostring else error("账户路由缺少 catalog_filtered") end')"
+  if [[ "$host_label" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    expected=false
+    if [[ "$(printf '%s\n' 8.0.37 "${BASH_REMATCH[1]}" | sort -V | head -n 1)" == "8.0.37" ]]; then
+      expected=true
+    fi
+    if [[ "$filtering" != "$expected" ]]; then
+      echo "CLIProxyAPI ${host_label} 的模型列表过滤状态为 ${filtering}，应为 ${expected}。" >&2
+      return 1
+    fi
+  fi
+  for format in openai claude gemini codex; do
+    auth=(-H "Authorization: Bearer e2e-downstream-key")
+    path="/v1/models"
+    case "$format" in
+      openai) filter='[.data[].id]' ;;
+      claude)
+        auth=(-H "x-api-key: e2e-downstream-key" -H "anthropic-version: 2023-06-01")
+        filter='[.data[].id | if startswith("claude-fable-5-dd-") then ltrimstr("claude-fable-5-dd-") | explode | reverse | implode else . end]'
+        ;;
+      gemini)
+        auth=(-H "x-goog-api-key: e2e-downstream-key")
+        path="/v1beta/models"
+        filter='[.models[].name | ltrimstr("models/")]'
+        ;;
+      codex)
+        path="/v1/models?client_version=0.130.0"
+        filter='[.models[].slug]'
+        ;;
+    esac
+    full="$(catalog_ids "$port" "$path" "$filter" "${auth[@]}" -H "X-CPA-Key-Billing-Models: all")"
+    panel="$(catalog_ids "$port" "$path" "$filter" "${auth[@]}" -H "Referer: http://127.0.0.1:$port/management.html")"
+    filtered="$(catalog_ids "$port" "$path" "$filter" "${auth[@]}")"
+    expected="$full"
+    if [[ "$filtering" == "true" ]]; then
+      expected="$(jq -c 'map(select(. == "e2e-credential-route"))' <<<"$full")"
+    fi
+    if [[ "$filtered" != "$expected" || "$panel" != "$full" ]]; then
+      echo "${format} 模型列表过滤结果不符：实际 ${filtered}，应为 ${expected}；管理面板 ${panel}。" >&2
+      return 1
+    fi
+  done
+  if [[ "$filtering" == "true" ]]; then
+    log_step "四种模型列表均按路由规则过滤，管理面板仍为完整列表"
+  else
+    log_step "宿主不支持模型列表过滤，四种模型列表保持完整"
+  fi
+}
+
 # Verify that a source-qualified Provider rule and an exact-Credential rule both
 # narrow CPA's candidate set instead of merely changing what the UI displays.
 assert_route_credential_policy() {
@@ -720,6 +785,7 @@ assert_route_credential_policy() {
     -H "Content-Type: application/json" \
     --data "$(jq -nc --arg scope "$scope" --arg route "$route" '{scope:$scope,bindings:{route_ids:[$route],models:["e2e-credential-route"],credential_ids:[],credential_providers:[]}}')" \
     >/dev/null
+  assert_model_catalog_filter "$port"
 
   body="$(request_body chat "e2e-credential-route" false "Reply with exactly OK.")"
   api_call "$port" "凭证类别路由：仅允许 route-allowed-e2e" \

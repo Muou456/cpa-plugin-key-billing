@@ -523,6 +523,20 @@ func (s *Store) ResolveRouting(scope, upstreamModel, routeModel string) RoutingD
 	return decision
 }
 
+// AllowedModels reports whether the key's model rules admit a request for
+// each model, resolving the billing model as admission does.
+func (s *Store) AllowedModels(scope string, models []string) []bool {
+	allowed := make([]bool, len(models))
+	s.read(func(state *State) {
+		decision := resolveRoutingState(state, state.Keys[normalizeScope(scope)])
+		for i, model := range models {
+			decision.Model = strings.TrimSpace(state.ResolveBillingModel(model, model))
+			allowed[i] = decision.AllowsModel()
+		}
+	})
+	return allowed
+}
+
 func (s *Store) KeyDescription(scope string) string {
 	result := ""
 	s.read(func(state *State) {

@@ -34,6 +34,7 @@ const (
 	MethodRequestInterceptAfter  = "request.intercept_after"
 	MethodRequestComplete        = "request.complete"
 	MethodSchedulerPick          = "scheduler.pick"
+	MethodResponseInterceptAfter = "response.intercept_after"
 
 	MethodUsageHandle = "usage.handle"
 
@@ -101,6 +102,7 @@ type ConfigField struct {
 
 type Capabilities struct {
 	RequestInterceptor        bool `json:"request_interceptor"`
+	ResponseInterceptor       bool `json:"response_interceptor"`
 	RequestLifecyclePlugin    bool `json:"request_lifecycle_plugin"`
 	UsagePlugin               bool `json:"usage_plugin"`
 	ManagementAPI             bool `json:"management_api"`
@@ -153,6 +155,19 @@ type RequestInterceptResponse struct {
 	StatusCode      int         `json:"StatusCode,omitempty"`
 	ResponseHeaders http.Header `json:"ResponseHeaders,omitempty"`
 	ResponseBody    []byte      `json:"ResponseBody,omitempty"`
+}
+
+// ResponseInterceptRequest holds the fields model catalog filtering reads.
+type ResponseInterceptRequest struct {
+	Model          string      `json:"Model"`
+	RequestedModel string      `json:"RequestedModel"`
+	RequestHeaders http.Header `json:"RequestHeaders"`
+	Body           []byte      `json:"Body"`
+}
+
+// ResponseInterceptResponse leaves the response unchanged when Body is empty.
+type ResponseInterceptResponse struct {
+	Body []byte `json:"Body,omitempty"`
 }
 
 type UsageRecord struct {

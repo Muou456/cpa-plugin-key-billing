@@ -60,6 +60,7 @@
   "ui.add_pricing": "新增定价",
   "ui.filter_by_model": "按模型筛选",
   "ui.all_models": "全部模型",
+  "ui.all_models_within_credential_access": "凭证范围内的全部模型",
   "ui.filter_by_source": "按来源筛选",
   "ui.all_sources": "全部来源",
   "ui.filter_by_result": "按结果筛选",

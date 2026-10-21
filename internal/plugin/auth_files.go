@@ -22,6 +22,7 @@ const (
 	hostAuthList             = "host.auth.list"
 	hostAuthGet              = "host.auth.get"
 	hostAuthGetRuntime       = "host.auth.get_runtime"
+	hostAuthModels           = "host.auth.models"
 	hostRoutingResetCooldown = "host.routing.reset_cooldown"
 )
 

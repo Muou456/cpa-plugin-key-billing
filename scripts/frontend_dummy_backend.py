@@ -1226,7 +1226,7 @@ def account_routing_view(index):
         "credentials": [credential_view(item) for item in CREDENTIALS if item["ref"] in refs or (item["source"], item["provider"]) in providers],
         "denied_credentials": [credential_view(item) for item in CREDENTIALS if item["ref"] in denied_refs] +
             [{"source": source, "provider": provider, "provider_wide": True, "denied": True} for source, provider in sorted(denied_providers)],
-        "routing_valid": True, "warnings": [],
+        "routing_valid": True, "catalog_filtered": True, "warnings": [],
     }
 
 
@@ -1852,6 +1852,13 @@ class Handler(BaseHTTPRequestHandler):
             if not authorization.startswith("Bearer ") or authorization[7:] not in api_keys:
                 self.send_json(401, {"error": {"message": "API Key 无效"}})
                 return
+            # Mirrors the plugin's catalog filtering for model rules; management asks for every model.
+            payload = payload_for(parsed.path, query)
+            if self.headers.get("X-CPA-Key-Billing-Models", "").lower() != "all":
+                models, _, _, denied_models, _, _ = account_routing(api_keys.index(authorization[7:]))
+                payload["data"] = [row for row in payload["data"] if (not models or row["id"] in models) and row["id"] not in denied_models]
+            self.send_json(200, payload)
+            return
         resource_paths = {
             f"{RESOURCE_BASE}/profile",
             f"{RESOURCE_BASE}/subscription",

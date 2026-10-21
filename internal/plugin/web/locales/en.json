@@ -60,6 +60,7 @@
   "ui.add_pricing": "Add pricing",
   "ui.filter_by_model": "Filter by model",
   "ui.all_models": "All models",
+  "ui.all_models_within_credential_access": "All models within credential access",
   "ui.filter_by_source": "Filter by source",
   "ui.all_sources": "All sources",
   "ui.filter_by_result": "Filter by result",

@@ -596,7 +596,7 @@ func TestConfigCredentialSyncSurvivesRestartAndRollsBack(t *testing.T) {
 			t.Fatal(err)
 		}
 		app.SetHostCaller(func(method string, _ any) (json.RawMessage, error) {
-			if method != hostAuthList {
+			if method != hostAuthList && method != hostAuthModels {
 				t.Fatalf("host method = %q", method)
 			}
 			return json.RawMessage(`{"files":[{"id":"dummy-auth-file","provider":"codex","source":"file","email":"live@example.com"}]}`), nil

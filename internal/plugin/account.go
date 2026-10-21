@@ -41,6 +41,7 @@ type accountRoutingResponse struct {
 	DeniedModels      []string                 `json:"denied_models"`
 	DeniedCredentials []accountRouteCredential `json:"denied_credentials"`
 	RoutingValid      bool                     `json:"routing_valid"`
+	CatalogFiltered   bool                     `json:"catalog_filtered"`
 	Warnings          []string                 `json:"warnings"`
 	WarningMessages   []messages.Message       `json:"warning_messages,omitempty"`
 }
@@ -83,7 +84,7 @@ func (a *App) accountRouting(access viewAccess) ManagementResponse {
 	response := accountRoutingResponse{
 		Models: decision.Models, DeniedModels: decision.DeniedModels,
 		Credentials: []accountRouteCredential{}, DeniedCredentials: []accountRouteCredential{},
-		RoutingValid: decision.ConfigurationError == "", Warnings: []string{},
+		RoutingValid: decision.ConfigurationError == "", CatalogFiltered: a.filtersModelCatalogs.Load(), Warnings: []string{},
 	}
 	if decision.ConfigurationError != "" {
 		response.Warnings = append(response.Warnings, "The routing rule no longer exists; contact your administrator")

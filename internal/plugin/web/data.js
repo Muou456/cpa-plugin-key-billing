@@ -548,8 +548,10 @@ async function fetchConfiguredAPIKeys() {
   return parseConfiguredAPIKeys(result);
 }
 
+// The plugin filters /v1/models by the key's routing rules; management lists every model.
 async function fetchModels(account, key) {
-  const result = await api("GET", "/v1/models", null, { key, auxiliaryCredential: !account });
+  const headers = account ? {} : { "X-CPA-Key-Billing-Models": "all" };
+  const result = await api("GET", "/v1/models", null, { key, headers, auxiliaryCredential: !account });
   const rows = requireArray(result?.data, m("ui.cpa_model_list"));
   if (rows.some((row) => !row || typeof row.id !== "string" || !row.id.trim())) throw new UIError(m("ui.invalid_cpa_model_list"));
   const models = [...new Set(rows.map((row) => row.id))].sort(compareModelId);
