@@ -106,11 +106,20 @@ func TestUsageBreakdownMatchesCurrentHostSemantics(t *testing.T) {
 }
 
 func TestUsageBreakdownHandlesUnknownOrContradictoryRecords(t *testing.T) {
-	unknown := usageBreakdown(UsageRecord{Provider: "future-provider", Detail: UsageDetail{
+	// Every semantics agrees when no count depends on it, as with plain plugin executor usage.
+	agreed := usageBreakdown(UsageRecord{Provider: "freetier", ExecutorType: "executorAdapter", Detail: UsageDetail{
 		InputTokens: 100, OutputTokens: 20, TotalTokens: 120,
 	}})
-	if unknown.Quality != billing.TokenAccountingUnclassified || unknown.UnclassifiedTokens != 120 || unknown.Billable() {
-		t.Fatalf("unknown breakdown = %+v", unknown)
+	if agreed.Quality != billing.TokenAccountingComplete || agreed.Input.UncachedTokens != 100 ||
+		agreed.Output.NonReasoningTokens != 20 || !agreed.Billable() {
+		t.Fatalf("agreed breakdown = %+v", agreed)
+	}
+	// Without a total, reasoning may be part of the output or separate from it.
+	ambiguous := usageBreakdown(UsageRecord{Provider: "future-provider", Detail: UsageDetail{
+		InputTokens: 100, OutputTokens: 20, ReasoningTokens: 5,
+	}})
+	if ambiguous.Quality != billing.TokenAccountingUnclassified || ambiguous.Billable() {
+		t.Fatalf("ambiguous breakdown = %+v", ambiguous)
 	}
 	unknownRemainder := usageBreakdown(UsageRecord{Provider: "future-provider", Detail: UsageDetail{
 		InputTokens: 100, OutputTokens: 20, TotalTokens: 125,

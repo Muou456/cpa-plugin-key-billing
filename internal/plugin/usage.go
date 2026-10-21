@@ -31,12 +31,36 @@ func usageHasTokens(detail UsageDetail) bool {
 // CLIProxyAPI applies before flattening its internal usage.Detail for plugins.
 // A zero detail means the provider reported no usage, not a measured zero, so
 // it deliberately keeps the zero-value quality used by request events.
+//
+// Plugin executors and other unknown executors carry no semantics. Their usage
+// is still classified when every semantics the counts do not contradict yields
+// the same breakdown, because CLIProxyAPI recorded one of them.
 func usageBreakdown(record UsageRecord) billing.TokenBreakdown {
 	detail := record.Detail
 	if !usageHasTokens(detail) {
 		return billing.TokenBreakdown{}
 	}
-	semantics := usageSemantics(record.Provider, record.ExecutorType)
+	if semantics := usageSemantics(record.Provider, record.ExecutorType); semantics != tokenSemanticsUnknown {
+		return semanticBreakdown(detail, semantics)
+	}
+	var agreed *billing.TokenBreakdown
+	for _, semantics := range []tokenSemantics{tokenSemanticsSubset, tokenSemanticsIndependent, tokenSemanticsSeparateReasoning} {
+		breakdown := semanticBreakdown(detail, semantics)
+		if breakdown.Quality == billing.TokenAccountingInconsistent {
+			continue
+		}
+		if agreed != nil && *agreed != breakdown {
+			return unclassifiedUsage(detail)
+		}
+		agreed = &breakdown
+	}
+	if agreed == nil || agreed.Quality != billing.TokenAccountingComplete {
+		return unclassifiedUsage(detail)
+	}
+	return *agreed
+}
+
+func semanticBreakdown(detail UsageDetail, semantics tokenSemantics) billing.TokenBreakdown {
 	input := detail.InputTokens
 	output := detail.OutputTokens
 	reasoning := detail.ReasoningTokens
@@ -44,7 +68,7 @@ func usageBreakdown(record UsageRecord) billing.TokenBreakdown {
 	cacheWrite := detail.CacheCreationTokens
 	total := detail.TotalTokens
 	if total > 0 && input == 0 && output == 0 && reasoning == 0 && cacheRead == 0 && cacheWrite == 0 &&
-		detail.CachedTokens == 0 && (semantics == tokenSemanticsSubset || semantics == tokenSemanticsUnknown) {
+		detail.CachedTokens == 0 && semantics == tokenSemanticsSubset {
 		return unclassifiedBreakdown(total)
 	}
 	if total == 0 && input == 0 && output == 0 {
@@ -52,48 +76,50 @@ func usageBreakdown(record UsageRecord) billing.TokenBreakdown {
 		if !okLowerBound {
 			return inconsistentBreakdown(total, 0)
 		}
-		if lowerBound > 0 && (semantics == tokenSemanticsUnknown || semantics == tokenSemanticsSubset ||
+		if lowerBound > 0 && (semantics == tokenSemanticsSubset ||
 			(semantics == tokenSemanticsSeparateReasoning && (cacheRead > 0 || cacheWrite > 0 || detail.CachedTokens > 0))) {
 			return unclassifiedBreakdown(lowerBound)
 		}
+	}
+	switch semantics {
+	case tokenSemanticsIndependent:
+		return providerIndependentBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
+	case tokenSemanticsSeparateReasoning:
+		return separateReasoningBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
 	}
 	// OpenAI-style parsers retain raw child buckets even when their parent total
 	// is absent, but the canonical host breakdown leaves those children in the
 	// unclassified remainder. Presence bits are not exposed through UsageRecord;
 	// under subset semantics, a non-zero child of a zero parent is the equivalent
 	// signal.
-	if semantics == tokenSemanticsSubset {
-		if input == 0 {
-			cacheRead = 0
-			cacheWrite = 0
-		}
-		if output == 0 {
-			reasoning = 0
-		}
+	if input == 0 {
+		cacheRead = 0
+		cacheWrite = 0
 	}
+	if output == 0 {
+		reasoning = 0
+	}
+	return subsetBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
+}
 
-	switch semantics {
-	case tokenSemanticsSubset:
-		return subsetBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
-	case tokenSemanticsIndependent:
-		return providerIndependentBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
-	case tokenSemanticsSeparateReasoning:
-		return separateReasoningBreakdown(input, cacheRead, cacheWrite, output, reasoning, total)
-	default:
-		lowerBound, okLowerBound := unclassifiedLowerBound(input, output, reasoning, cacheRead, cacheWrite, detail.CachedTokens)
-		if !okLowerBound {
-			return inconsistentBreakdown(total, 0)
-		}
-		if total == 0 {
-			total = lowerBound
-		}
-		return unclassifiedBreakdown(total)
+// unclassifiedUsage keeps the reported total, or the sum of the known parts
+// when the provider reported none.
+func unclassifiedUsage(detail UsageDetail) billing.TokenBreakdown {
+	lowerBound, okLowerBound := unclassifiedLowerBound(detail.InputTokens, detail.OutputTokens, detail.ReasoningTokens,
+		detail.CacheReadTokens, detail.CacheCreationTokens, detail.CachedTokens)
+	if !okLowerBound {
+		return inconsistentBreakdown(detail.TotalTokens, 0)
 	}
+	total := detail.TotalTokens
+	if total == 0 {
+		total = lowerBound
+	}
+	return unclassifiedBreakdown(total)
 }
 
 // Native executors can publish a canonical breakdown that the RPC contract
 // flattens. Match their known parser semantics before the host's legacy
-// provider classifier; unknown executors must remain unclassified.
+// provider classifier.
 func usageSemantics(provider, executorType string) tokenSemantics {
 	normalizedProvider := strings.ToLower(strings.TrimSpace(provider))
 	normalizedExecutor := strings.ToLower(strings.TrimSpace(executorType))

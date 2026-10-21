@@ -275,11 +275,11 @@ func TestUsageHandleRecordsUnscopedUsageWithoutCreatingKey(t *testing.T) {
 	assertCostClose(t, analysis.Summary.Cost.TotalUSD, 0.001)
 }
 
-func TestUsageHandleDoesNotGuessUnknownProviderAccounting(t *testing.T) {
+func TestUsageHandleDoesNotGuessAmbiguousUnknownAccounting(t *testing.T) {
 	app := newAppWithPrice(t, true)
 	publishUsageRecord(t, app, UsageRecord{
 		Provider: "future-provider", Model: flowModel, Alias: flowModel, APIKey: testAPIKey,
-		Generate: true, Detail: UsageDetail{InputTokens: 100, OutputTokens: 20, TotalTokens: 120},
+		Generate: true, Detail: UsageDetail{InputTokens: 100, OutputTokens: 20, ReasoningTokens: 5},
 	})
 	cost, requests := requestEventCost(t, app)
 	if requests != 1 {
