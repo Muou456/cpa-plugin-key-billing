@@ -55,6 +55,7 @@
   "ui.deny_all": "全部拒绝",
   "ui.clear": "清空",
   "ui.model_pricing": "模型定价",
+  "ui.usd_per_1m_tokens": "USD / 1M Token",
   "ui.search_models": "搜索模型",
   "ui.update_references": "更新参考价",
   "ui.add_pricing": "新增定价",

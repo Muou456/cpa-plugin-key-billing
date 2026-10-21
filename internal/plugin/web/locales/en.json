@@ -55,6 +55,7 @@
   "ui.deny_all": "Deny all",
   "ui.clear": "Clear",
   "ui.model_pricing": "Model pricing",
+  "ui.usd_per_1m_tokens": "USD / 1M tokens",
   "ui.search_models": "Search models",
   "ui.update_references": "Update references",
   "ui.add_pricing": "Add pricing",

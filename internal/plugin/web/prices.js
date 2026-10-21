@@ -1,31 +1,64 @@
 function priceSourceTag(source) {
   switch (source) {
     case "custom":
-      return el("span", { class: "tag warn", text: m("ui.custom") });
+      return el("span", { class: "tag ok", text: m("ui.custom") });
     case "builtin":
-      return el("span", { class: "tag ok", text: m("ui.built_in") });
+      return el("span", { class: "tag plain", text: m("ui.built_in") });
     case "reference":
-      return el("span", { class: "tag ok", text: m("ui.reference") });
+      return el("span", { class: "tag info", text: m("ui.reference") });
     default:
-      return el("span", { class: "tag plain", text: m("ui.unpriced") });
+      return el("span", { class: "tag warn", text: m("ui.unpriced") });
   }
 }
 
+const PRICE_FIELDS = [
+  ["input_per_1m", "ui.input"],
+  ["output_per_1m", "ui.output"],
+  ["cache_read_per_1m", "ui.cache_read"],
+  ["cache_write_per_1m", "ui.cache_write"]
+];
+
 function priceValue(value) { return value === null || value === undefined ? el("span", { class: "muted", text: "—" }) : usd(value); }
 
-function tierPriceCell(row, field) {
-  if (row.source === "none") return priceValue(null);
-  const base = row[field];
+function longContextPrices(row) {
   const tier = row.long_context;
-  if (!tier) return priceValue(base);
   const threshold = tokenThreshold(tier.threshold_input_tokens);
-  const longValue = tier[field];
-  if ((base === null || base === undefined) && (longValue === null || longValue === undefined)) { return priceValue(null); }
+  const tooltip = () => [
+    el(
+      "table",
+      { class: "compact-table" },
+      el(
+        "thead",
+        {},
+        el(
+          "tr",
+          {},
+          el("th"),
+          el("th", { class: "num", text: m("ui.standard_context_value", { v0: threshold }) }),
+          el("th", { class: "num", text: m("ui.long_context_value", { v0: threshold }) })
+        )
+      ),
+      el(
+        "tbody",
+        {},
+        PRICE_FIELDS.map(([field, label]) =>
+          el(
+            "tr",
+            {},
+            el("td", { text: m(label) }),
+            el("td", { class: "num" }, priceValue(row[field])),
+            el("td", { class: "num" }, priceValue(tier[field]))
+          )
+        )
+      )
+    )
+  ];
   return el(
-    "div",
-    { class: "tier-price" },
-    el("span", {}, priceValue(base)),
-    el("span", { class: "muted small" }, ">" + threshold + " ", priceValue(longValue))
+    "span",
+    { class: "breakdown-value", ...hoverTooltipProps(tooltip) },
+    el("span", { class: "long-context-threshold", text: ">" + threshold }),
+    " ",
+    PRICE_FIELDS.flatMap(([field], index) => [index > 0 && el("span", { class: "muted", text: DISPLAY_SLASH }), priceValue(tier[field])])
   );
 }
 
@@ -35,6 +68,7 @@ function renderPriceTable() {
   const rows = resources.admin.catalog.value.prices.filter((row) => !filter || row.model_id.toLowerCase().includes(filter))
     .sort((a, b) => compareModelId(a.model_id, b.model_id));
   const renderRow = (row) => {
+    const priced = row.source !== "none";
     return el(
       "tr",
       {},
@@ -47,30 +81,21 @@ function renderPriceTable() {
           ? el("div", { class: "muted small", text: m("ui.using_the_custom_price_for_value", { v0: row.custom_price_model_id }) })
           : null
       ),
-      el("td", { class: "num" }, tierPriceCell(row, "input_per_1m")),
-      el("td", { class: "num" }, tierPriceCell(row, "output_per_1m")),
-      el("td", { class: "num" }, tierPriceCell(row, "cache_read_per_1m")),
-      el("td", { class: "num" }, tierPriceCell(row, "cache_write_per_1m")),
+      PRICE_FIELDS.map(([field]) => el("td", { class: "num" }, priceValue(priced ? row[field] : null))),
+      el("td", {}, row.long_context ? longContextPrices(row) : priceValue(null)),
       el("td", {}, priceSourceTag(row.source)),
       el(
         "td",
         { class: "small" },
         el("button", { class: "link", text: m("ui.edit"), onclick: () => editPrice(row) }),
-        el("button", {
-          class: "link danger",
-          text: m("ui.delete"),
-          disabled: row.source !== "custom",
-          onclick: () => deleteCustomPrice(row)
-        })
+        row.source === "custom" && el("button", { class: "link danger", text: m("ui.delete"), onclick: () => deleteCustomPrice(row) })
       )
     );
   };
   const headers = [
     m("ui.model"),
-    { label: m("ui.input_1m_tokens"), num: true },
-    { label: m("ui.output_1m_tokens"), num: true },
-    { label: m("ui.cache_read_1m_tokens"), num: true },
-    { label: m("ui.cache_write_1m_tokens"), num: true },
+    ...PRICE_FIELDS.map(([, label]) => ({ label: m(label), num: true })),
+    m("ui.long_context"),
     m("ui.source"),
     m("ui.actions")
   ];

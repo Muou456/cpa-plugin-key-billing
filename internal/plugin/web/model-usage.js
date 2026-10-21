@@ -18,7 +18,7 @@ function renderModelUsageTable(models) {
     Object.fromEntries(MODEL_USAGE_SUMS.map((field) => [field, models.reduce((sum, model) => sum + (model[field] || 0), 0)]));
   return el(
     "table",
-    { class: "model-usage-table" },
+    { class: "compact-table" },
     el("thead", {}, el("tr", {}, el("th", { text: m("ui.model") }), columns.map(([label]) => el("th", { class: "num", text: label })))),
     el("tbody", {}, models.map((model) => row(model.model || m("ui.unknown_model"), model))),
     total && el("tfoot", {}, row(m("ui.total"), total))
