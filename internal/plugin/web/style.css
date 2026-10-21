@@ -905,6 +905,7 @@ body.embedded .standalone-actions { display: none; }
 .quota-heading > :first-child { overflow: hidden; text-overflow: ellipsis; }
 .quota-heading .blocked { color: var(--quota-low-color); }
 #keys-body .quota-windows { width: 260px; }
+#keys-body .key-index { padding-right: 0; color: var(--text-tertiary); font-size: 12px; }
 .settings-dialog.plan-dialog { width: min(720px, calc(100vw - 32px)); }
 .plan-windows-heading { margin-top: 16px; }
 #plan-windows { display: grid; gap: 10px; margin-top: 8px; }

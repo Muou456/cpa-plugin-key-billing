@@ -67,6 +67,7 @@ function renderKeys() {
   );
   renderCollection($("keys-body"), keys, {
     headers: [
+      "",
       "API Key",
       m("ui.subscription_plans"),
       m("ui.routing_rules"),
@@ -75,7 +76,7 @@ function renderKeys() {
       m("ui.status"),
       m("ui.actions")
     ],
-    render: (view) => {
+    render: (view, index) => {
       const deleted = !!view.deleted_at;
       const saving = adminUIState.keySubmissions.has(view.scope);
       const name = apiKeyIdentity(view).primary;
@@ -151,6 +152,7 @@ function renderKeys() {
       return el(
         "tr",
         { class: deleted ? "key-deleted" : "" },
+        el("td", { class: "key-index", text: "#" + (index + 1) }),
         el(
           "td",
           {},
