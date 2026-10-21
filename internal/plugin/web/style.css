@@ -1609,11 +1609,11 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 }
 /* The tag is a full-height end segment; its extra end padding clears the rounded corner it is clipped to. */
 .settings-chip.has-tag { align-items: stretch; padding: 0 0 0 8px; }
-.settings-chip.has-tag > .settings-chip-label { flex: 0 1 auto; align-self: center; padding-block: 2px; }
 .settings-chip.has-tag > .tag { flex: none; margin-left: 3px; padding: 2px 11px 2px 8px; border-width: 0 0 0 1px; border-radius: 0; }
 .settings-chip > .lucide-icon, .settings-chip-tooltip > .lucide-icon { align-self: center; margin: 0; width: 13px; height: 13px; }
-/* A chip stays on one line; the hover tooltip carries whatever the ellipsis cuts off. */
-.settings-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A chip stays on one line; the hover tooltip carries whatever the ellipsis cuts off.
+   The clip box bleeds into the chip padding so masked text blurs out inside the chip. */
+.settings-chip-label { align-self: center; min-width: 0; margin: -2px -8px; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis; }
 .settings-chip-tooltip { display: flex; align-items: center; gap: 5px; }
 .key-route-cell { min-width: 125px; max-width: 190px; font-size: 12px; }
 .key-route-lines { display: grid; gap: 4px; }
