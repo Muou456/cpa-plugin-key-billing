@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -165,6 +166,63 @@ func (a *App) selectedCredentialAllowed(req RequestInterceptRequest, decision bi
 	a.credentialIdentities[id] = identity
 	a.routingMu.Unlock()
 	return routingAllowsCredential(id, identity.Source, identity.Provider, decision), nil
+}
+
+// host.auth.models backs model catalog filtering and explains routed requests
+// left without a credential. Older hosts fail this probe.
+func (a *App) probeHostAuthModels() bool {
+	if a.hostCaller == nil {
+		return false
+	}
+	if _, err := a.hostCaller(hostAuthModels, map[string]any{}); err != nil {
+		a.store.AddPluginLog(billing.PluginLogDebug, "Upstream credential models are unavailable: %v", err)
+		return false
+	}
+	return true
+}
+
+// credentialModels collects the models served by credentials the rules allow.
+// Sources matter only to provider selectors. host.auth.list omits exactly the
+// config-backed credentials, so a credential it does not list is an AI
+// provider key.
+func (a *App) credentialModels(decision billing.RoutingDecision) (map[string]bool, error) {
+	raw, err := a.hostCaller(hostAuthModels, map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Credentials []struct {
+			ID       string   `json:"id"`
+			Provider string   `json:"provider"`
+			Models   []string `json:"models"`
+		} `json:"credentials"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, fmt.Errorf("Parse credential models: %w", err)
+	}
+	sources := map[string]string{}
+	if len(decision.CredentialProviders) > 0 || len(decision.DeniedCredentialProviders) > 0 {
+		files, err := a.listHostAuthFiles()
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range files {
+			sources[file.ID] = credentialSourceFromHost(file)
+		}
+	}
+	provided := map[string]bool{}
+	for _, credential := range response.Credentials {
+		source, listed := sources[credential.ID]
+		if !listed {
+			source = billing.CredentialSourceAIProviders
+		}
+		if routingAllowsCredential(credential.ID, source, credential.Provider, decision) {
+			for _, model := range credential.Models {
+				provided[model] = true
+			}
+		}
+	}
+	return provided, nil
 }
 
 func (a *App) refreshCredentialInventory() error {

@@ -177,7 +177,7 @@ On CLIProxyAPI 8.0.37 or later, the model list an API key receives contains only
 | Concurrency limit reached | `429` | `rate_limit_error` | `rate_limit_exceeded` |
 | Subscription quota exhausted | `429` | `rate_limit_error` | `rate_limit_exceeded` |
 | Model access denied | `403` | `permission_error` | `insufficient_quota` |
-| No available credential matches the routing rules | `503` | `server_error` | `internal_server_error` |
+| The credentials the routing rules allow do not serve the model, or none is available | `503` | `server_error` | `internal_server_error` |
 | The selected credential violates the routing rules | `503` | `server_error` | `routing_credential_mismatch` |
 | The selected credential's routing permissions cannot be verified | `503` | `server_error` | `routing_credential_unverified` |
 | A bound routing rule is missing or invalid | `503` | `server_error` | `routing_configuration_error` |

@@ -167,7 +167,7 @@ flowchart TB
 | API Key 并发已满 | `429` | `rate_limit_error` | `rate_limit_exceeded` |
 | 订阅额度用尽 | `429` | `rate_limit_error` | `rate_limit_exceeded` |
 | 模型无权访问 | `403` | `permission_error` | `insufficient_quota` |
-| 没有符合规则且可用的凭证 | `503` | `server_error` | `internal_server_error` |
+| 路由规则允许的凭证都不提供该模型，或当前都不可用 | `503` | `server_error` | `internal_server_error` |
 | 选中的凭证不符合路由规则 | `503` | `server_error` | `routing_credential_mismatch` |
 | 无法校验所选凭证的路由权限 | `503` | `server_error` | `routing_credential_unverified` |
 | 已绑定的路由规则不存在或损坏 | `503` | `server_error` | `routing_configuration_error` |

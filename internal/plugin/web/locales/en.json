@@ -444,6 +444,8 @@
   "ui.configuration_error": "Configuration error",
   "ui.allowed": "Allowed",
   "ui.upstream_credential_value": "Upstream credential: {v0}",
+  "ui.upstream_credential_allowed_unavailable": "Upstream credential: allowed credentials unavailable",
+  "ui.upstream_credential_none_allowed_serves_model": "Upstream credential: no allowed credential serves the model",
   "ui.upstream_credential_no_available_match": "Upstream credential: no available match",
   "ui.upstream_credential_selection_not_reached": "Upstream credential: selection not reached",
   "ui.upstream_credential_selection_not_observed": "Upstream credential: selection not observed",

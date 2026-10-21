@@ -217,24 +217,30 @@ func TestAfterAuthEnforcesCredentialRoutesAndRecordsResults(t *testing.T) {
 }
 
 func TestMissingRoutedCredentialIsExplicitInLog(t *testing.T) {
-	app, scope := configuredRoutingApp(t, billing.RouteRule{CredentialProviders: []billing.CredentialProviderSelector{{Source: billing.CredentialSourceAuthFiles, Provider: "codex"}}})
-	if _, err := app.HandleMethod(MethodRequestInterceptBefore, mustMarshal(t, RequestInterceptRequest{RequestID: "no-match", Model: "codex/deepseek", RequestedModel: "codex/deepseek", Metadata: map[string]any{MetadataCallerScope: scope}})); err != nil {
-		t.Fatal(err)
+	levels := map[routingShortfall]billing.PluginLogLevel{
+		routeUnavailable: billing.PluginLogInfo, routeNoCredential: billing.PluginLogError, routeNoMatch: billing.PluginLogInfo,
 	}
-	if _, err := app.HandleMethod(MethodRequestComplete, mustMarshal(t, RequestCompletion{RequestID: "no-match", Outcome: "failed", StatusCode: 503, Error: noRoutedCredentialMessage})); err != nil {
-		t.Fatal(err)
-	}
-
-	page, err := app.store.PluginLogsPage(billing.PluginLogQuery{Levels: []billing.PluginLogLevel{billing.PluginLogDebug}, Limit: 10})
-	if err != nil || len(page.Entries) != 1 {
-		t.Fatalf("entries=%+v err=%v", page.Entries, err)
-	}
-	var row map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimPrefix(page.Entries[0].Message, "route ")), &row); err != nil {
-		t.Fatal(err)
-	}
-	if row["credential_result"] != "no_match" {
-		t.Fatalf("row=%+v", row)
+	for _, shortfall := range routingShortfalls {
+		t.Run(shortfall.result, func(t *testing.T) {
+			app, scope := configuredRoutingApp(t, billing.RouteRule{CredentialProviders: []billing.CredentialProviderSelector{{Source: billing.CredentialSourceAuthFiles, Provider: "codex"}}})
+			if _, err := app.HandleMethod(MethodRequestInterceptBefore, mustMarshal(t, RequestInterceptRequest{RequestID: "no-match", Model: "codex/deepseek", RequestedModel: "codex/deepseek", Metadata: map[string]any{MetadataCallerScope: scope}})); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := app.HandleMethod(MethodRequestComplete, mustMarshal(t, RequestCompletion{RequestID: "no-match", Outcome: "failed", StatusCode: 503, Error: shortfall.message})); err != nil {
+				t.Fatal(err)
+			}
+			page, err := app.store.PluginLogsPage(billing.PluginLogQuery{Limit: 10})
+			if err != nil || len(page.Entries) == 0 || page.Entries[0].Level != levels[shortfall] {
+				t.Fatalf("entries=%+v err=%v", page.Entries, err)
+			}
+			var row map[string]any
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(page.Entries[0].Message, "route ")), &row); err != nil {
+				t.Fatal(err)
+			}
+			if row["credential_result"] != shortfall.result {
+				t.Fatalf("row=%+v", row)
+			}
+		})
 	}
 }
 
@@ -521,25 +527,42 @@ func TestSchedulerUsesCredentialsFromEveryBoundRoute(t *testing.T) {
 	}
 }
 
+// Hosts offer only usable candidates; host.auth.models tells whether an allowed
+// credential serves the model at all.
 func TestSchedulerFailsClosedWithoutAUsableRoutedCandidate(t *testing.T) {
+	const serves = `{"credentials":[{"id":"wanted","provider":"codex","models":["gpt-5.6"]},{"id":"a","provider":"codex","models":["gpt-5.6"]},{"id":"outside","provider":"codex","models":["gpt-5.6"]}]}`
 	tests := []struct {
 		name       string
 		rule       billing.RouteRule
 		candidates []SchedulerAuthCandidate
+		models     string
+		want       routingShortfall
 	}{
 		{
-			name: "no match",
+			name: "older host",
 			rule: billing.RouteRule{CredentialIDs: []string{billing.CredentialFingerprint("wanted")}},
 			candidates: []SchedulerAuthCandidate{
 				{ID: "other", Provider: "codex", Attributes: map[string]string{"path": "/other"}},
 			},
+			want: routeNoMatch,
+		},
+		{
+			name: "allowed credential unavailable",
+			rule: billing.RouteRule{CredentialIDs: []string{billing.CredentialFingerprint("wanted")}},
+			candidates: []SchedulerAuthCandidate{
+				{ID: "other", Provider: "codex", Attributes: map[string]string{"path": "/other"}},
+			},
+			models: serves,
+			want:   routeUnavailable,
 		},
 		{
 			name: "all denied",
-			rule: billing.RouteRule{DeniedCredentialIDs: []string{billing.CredentialFingerprint("outside")}},
+			rule: billing.RouteRule{DeniedCredentialIDs: []string{billing.CredentialFingerprint("wanted"), billing.CredentialFingerprint("a"), billing.CredentialFingerprint("outside")}},
 			candidates: []SchedulerAuthCandidate{
 				{ID: "outside", Provider: "codex", Attributes: map[string]string{"path": "/outside"}},
 			},
+			models: serves,
+			want:   routeNoCredential,
 		},
 		{
 			name: "weight exceeds host limit",
@@ -548,6 +571,8 @@ func TestSchedulerFailsClosedWithoutAUsableRoutedCandidate(t *testing.T) {
 				{ID: "a", Provider: "codex", Attributes: map[string]string{"path": "/a", "weight": "1000001"}},
 				{ID: "outside", Provider: "codex", Attributes: map[string]string{"path": "/outside"}},
 			},
+			models: serves,
+			want:   routeUnavailable,
 		},
 		{
 			name: "non-positive weight",
@@ -556,12 +581,23 @@ func TestSchedulerFailsClosedWithoutAUsableRoutedCandidate(t *testing.T) {
 				{ID: "a", Provider: "codex", Attributes: map[string]string{"path": "/a", "weight": "0"}},
 				{ID: "outside", Provider: "codex", Attributes: map[string]string{"path": "/outside"}},
 			},
+			models: serves,
+			want:   routeUnavailable,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			app, scope := configuredRoutingApp(t, test.rule)
 			app.scheduler.configure(billing.RoutingConfig{Strategy: "weighted-round-robin", SessionAffinityTTL: "1h"}, true)
+			if test.models != "" {
+				app.SetHostCaller(func(method string, _ any) (json.RawMessage, error) {
+					if method != hostAuthModels {
+						t.Fatalf("host method = %q", method)
+					}
+					return json.RawMessage(test.models), nil
+				})
+				app.authModelsSupported.Store(true)
+			}
 			raw, err := app.HandleMethod(MethodSchedulerPick, mustMarshal(t, schedulerRequest(scope, test.candidates...)))
 			if err != nil {
 				t.Fatal(err)
@@ -570,8 +606,8 @@ func TestSchedulerFailsClosedWithoutAUsableRoutedCandidate(t *testing.T) {
 			if err := json.Unmarshal(raw, &envelope); err != nil {
 				t.Fatal(err)
 			}
-			if envelope.OK || envelope.Error == nil || envelope.Error.HTTPStatus != 503 {
-				t.Fatalf("envelope=%+v", envelope)
+			if envelope.OK || envelope.Error == nil || envelope.Error.HTTPStatus != 503 || envelope.Error.Message != test.want.message {
+				t.Fatalf("envelope=%+v, want %q", envelope, test.want.message)
 			}
 		})
 	}

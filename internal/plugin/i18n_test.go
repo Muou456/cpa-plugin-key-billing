@@ -71,7 +71,11 @@ func TestProtocolRejectionsUseEnglishWithoutUITranslationMetadata(t *testing.T) 
 			}
 		}
 	}
-	if strings.IndexFunc(MenuLabel+MenuDescription+noRoutedCredentialMessage, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0 {
+	diagnostics := MenuLabel + MenuDescription
+	for _, shortfall := range routingShortfalls {
+		diagnostics += shortfall.message
+	}
+	if strings.IndexFunc(diagnostics, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0 {
 		t.Fatal("registration and scheduler diagnostics must use English")
 	}
 }

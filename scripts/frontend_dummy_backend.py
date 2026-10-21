@@ -1323,6 +1323,12 @@ ERRORS = [
 
 PLUGIN_LOGS = [
     {
+        "id": 4,
+        "at": iso(NOW - timedelta(minutes=1)),
+        "level": "info",
+        "message": "route " + json.dumps({"key": "代码审查机器人 · sk-demo…0001", "model": "gpt-5.6-luna", "model_policy": "restricted", "model_result": "allow", "credential_policy": "restricted", "credential_result": "unavailable", "outcome": "failed", "status": 503}, ensure_ascii=False, separators=(",", ":")),
+    },
+    {
         "id": 3,
         "at": iso(NOW - timedelta(minutes=2)),
         "level": "debug",

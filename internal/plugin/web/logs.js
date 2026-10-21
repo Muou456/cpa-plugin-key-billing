@@ -94,6 +94,8 @@ function renderPluginLogMessage(pluginLog) {
     }[row.credential_result];
     const credential =
       {
+        unavailable: m("ui.upstream_credential_allowed_unavailable"),
+        no_credential: m("ui.upstream_credential_none_allowed_serves_model"),
         no_match: m("ui.upstream_credential_no_available_match"),
         not_reached: m("ui.upstream_credential_selection_not_reached"),
         not_observed: m("ui.upstream_credential_selection_not_observed"),

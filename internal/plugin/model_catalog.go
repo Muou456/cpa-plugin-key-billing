@@ -20,24 +20,13 @@ const (
 	claudeCloakedModelPrefix = "claude-fable-5-dd-"
 )
 
-// Catalog filtering needs host.auth.models. Hosts without it fail this probe,
-// so the plugin never asks them to route responses through it.
-func (a *App) probeCredentialModels() bool {
-	if a.hostCaller == nil {
-		return false
-	}
-	if _, err := a.hostCaller(hostAuthModels, map[string]any{}); err != nil {
-		a.store.AddPluginLog(billing.PluginLogDebug, "Model catalog filtering is unavailable: %v", err)
-		return false
-	}
-	return true
-}
+func (a *App) filtersModelCatalogs() bool { return a.store.Enabled() && a.authModelsSupported.Load() }
 
 // Every non-streaming execution response also passes through this hook, with
 // its full bodies. Only a model catalog names no model, so decode the rest of
 // the request only for one.
 func (a *App) interceptResponse(raw []byte) ([]byte, error) {
-	if !a.filtersModelCatalogs.Load() {
+	if !a.filtersModelCatalogs() {
 		return OKEnvelope(ResponseInterceptResponse{})
 	}
 	var head struct {
@@ -115,50 +104,6 @@ func requestKeyScopes(headers http.Header) []string {
 		}
 	}
 	return scopes
-}
-
-// credentialModels collects the models served by credentials the rules allow.
-// Sources matter only to provider selectors. host.auth.list omits exactly the
-// config-backed credentials, so a credential it does not list is an AI
-// provider key.
-func (a *App) credentialModels(decision billing.RoutingDecision) (map[string]bool, error) {
-	raw, err := a.hostCaller(hostAuthModels, map[string]any{})
-	if err != nil {
-		return nil, err
-	}
-	var response struct {
-		Credentials []struct {
-			ID       string   `json:"id"`
-			Provider string   `json:"provider"`
-			Models   []string `json:"models"`
-		} `json:"credentials"`
-	}
-	if err := json.Unmarshal(raw, &response); err != nil {
-		return nil, fmt.Errorf("Parse credential models: %w", err)
-	}
-	sources := map[string]string{}
-	if len(decision.CredentialProviders) > 0 || len(decision.DeniedCredentialProviders) > 0 {
-		files, err := a.listHostAuthFiles()
-		if err != nil {
-			return nil, err
-		}
-		for _, file := range files {
-			sources[file.ID] = credentialSourceFromHost(file)
-		}
-	}
-	provided := map[string]bool{}
-	for _, credential := range response.Credentials {
-		source, listed := sources[credential.ID]
-		if !listed {
-			source = billing.CredentialSourceAIProviders
-		}
-		if routingAllowsCredential(credential.ID, source, credential.Provider, decision) {
-			for _, model := range credential.Models {
-				provided[model] = true
-			}
-		}
-	}
-	return provided, nil
 }
 
 type modelCatalog struct {

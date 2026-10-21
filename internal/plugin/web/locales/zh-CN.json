@@ -444,6 +444,8 @@
   "ui.configuration_error": "配置错误",
   "ui.allowed": "允许",
   "ui.upstream_credential_value": "上游凭证：{v0}",
+  "ui.upstream_credential_allowed_unavailable": "上游凭证：允许的凭证当前不可用",
+  "ui.upstream_credential_none_allowed_serves_model": "上游凭证：允许的凭证不提供该模型",
   "ui.upstream_credential_no_available_match": "上游凭证：无符合条件的可用凭证",
   "ui.upstream_credential_selection_not_reached": "上游凭证：未进入选择阶段",
   "ui.upstream_credential_selection_not_observed": "上游凭证：未观察到选择结果",

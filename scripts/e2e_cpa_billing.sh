@@ -621,11 +621,28 @@ assert_route_model_policy() {
     "$runtime_dir/responses/model-restored.json" false
 }
 
+# Hosts with host.auth.models filter model catalogs and tell why a routed
+# request found no credential.
+credential_models_supported() {
+  account_call "$1" "/v0/resource/plugins/cpa-key-billing/routing" |
+    jq -er '.catalog_filtered | if type == "boolean" then tostring else error("账户路由缺少 catalog_filtered") end'
+}
+
+# Prints the route log result and message for a request whose allowed
+# credentials do not serve its model. Older hosts report a generic mismatch.
+unserved_route() {
+  if [[ "$(credential_models_supported "$1")" == "true" ]]; then
+    printf '%s\t%s\n' no_credential "None of the upstream credentials allowed by this API key's routing rules serves this model"
+  else
+    printf '%s\t%s\n' no_match "No available upstream credentials match the routing rules"
+  fi
+}
+
 # Deny-only policies, direct allow conflicts, and exact exclusions must affect
 # the real host candidate set and leave no usage records for refused requests.
 assert_route_blacklist_policy() {
   local port="$1" runtime_dir="$2" expected_count="$3"
-  local scope route denied_ref body http_status requested
+  local scope route denied_ref body http_status requested unserved_message
   local events_file="$runtime_dir/blacklist-events.json"
   local response_file="$runtime_dir/responses/blacklist-blocked.json"
   management_call GET "$port" "/v0/management/plugins/cpa-key-billing/keys" >"$runtime_dir/blacklist-keys.json"
@@ -661,8 +678,9 @@ assert_route_blacklist_policy() {
   management_call PATCH "$port" "/v0/management/plugins/cpa-key-billing/routes" \
     -H "Content-Type: application/json" \
     --data "$(jq -nc --arg id "$route" '{id:$id,rule:{denied_credential_providers:[{source:"ai-providers",provider:"openai-compatible-route-allowed-e2e"},{source:"ai-providers",provider:"openai-compatible-route-denied-e2e"}]}}')" >/dev/null
+  IFS=$'\t' read -r _ unserved_message < <(unserved_route "$port")
   http_status="$(curl -sS --max-time 30 -H "Content-Type: application/json" -H "Authorization: Bearer e2e-downstream-key" --data "$body" --output "$response_file" --write-out '%{http_code}' "http://127.0.0.1:$port/v1/chat/completions")"
-  if [[ "$http_status" != "503" ]] || ! jq -e '(.error.message | contains("No available upstream credentials match the routing rules"))' "$response_file" >/dev/null; then
+  if [[ "$http_status" != "503" ]] || ! jq -e --arg message "$unserved_message" '.error.message == $message' "$response_file" >/dev/null; then
     echo "全部候选被黑名单排除后未返回 503。" >&2
     return 1
   fi
@@ -710,7 +728,7 @@ assert_model_catalog_filter() {
   local filtering expected format path filter full panel filtered
   local -a auth
 
-  filtering="$(account_call "$port" "/v0/resource/plugins/cpa-key-billing/routing" | jq -er '.catalog_filtered | if type == "boolean" then tostring else error("账户路由缺少 catalog_filtered") end')"
+  filtering="$(credential_models_supported "$port")"
   if [[ "$host_label" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
     expected=false
     if [[ "$(printf '%s\n' 8.0.37 "${BASH_REMATCH[1]}" | sort -V | head -n 1)" == "8.0.37" ]]; then
@@ -765,7 +783,7 @@ assert_route_credential_policy() {
   local port="$1"
   local runtime_dir="$2"
   local expected_count="$3"
-  local scope route allowed_ref body http_status response_file
+  local scope route allowed_ref body http_status response_file unserved_result unserved_message
   local access_file events_file plugin_logs_file
 
   access_file="$runtime_dir/credential-route-access.json"
@@ -840,9 +858,9 @@ assert_route_credential_policy() {
     --output "$response_file" \
     --write-out '%{http_code}' \
     "http://127.0.0.1:$port/v1/chat/completions")"
-  if [[ "$http_status" != "503" ]] || ! jq -e '
-      .error.type == "server_error" and .error.code == "internal_server_error" and
-      (.error.message | contains("No available upstream credentials match the routing rules"))
+  IFS=$'\t' read -r unserved_result unserved_message < <(unserved_route "$port")
+  if [[ "$http_status" != "503" ]] || ! jq -e --arg message "$unserved_message" '
+      .error.type == "server_error" and .error.code == "internal_server_error" and .error.message == $message
     ' "$response_file" >/dev/null; then
     echo "没有合格凭证时未按预期返回 503：HTTP $http_status $(jq -c '.' "$response_file")" >&2
     return 1
@@ -853,15 +871,15 @@ assert_route_credential_policy() {
     return 1
   fi
 
-  management_call GET "$port" "/v0/management/plugins/cpa-key-billing/plugin-logs?level=debug" >"$plugin_logs_file"
-  if ! jq -e '
+  management_call GET "$port" "/v0/management/plugins/cpa-key-billing/plugin-logs" >"$plugin_logs_file"
+  if ! jq -e --arg result "$unserved_result" '
       [.entries[]
-        | select(.level == "debug" and (.message | startswith("route ")))
+        | select(.message | startswith("route "))
         | (.message | gsub("&#34;"; "\"") | ltrimstr("route ") | fromjson)
         | select(.model == "e2e-credential-route")] as $rows |
       ($rows | length) == 3 and
       ([ $rows[] | select(.status == 200) ] | length) == 2 and
-      ([ $rows[] | select(.status == 503 and .credential_result == "no_match") ] | length) == 1 and
+      ([ $rows[] | select(.status == 503 and .credential_result == $result) ] | length) == 1 and
       all($rows[] | select(.status == 200);
         .model_result == "allow" and .credential_policy == "restricted" and .credential_result == "allow" and
         ((.selected_credential // "") | length) > 0 and

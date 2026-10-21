@@ -20,7 +20,6 @@ import (
 const maxPoolsPerKey = 256
 const maxCredentialsPerPool = 1024
 const maxSessionBindings = 65536
-const noRoutedCredentialMessage = "No available upstream credentials match the routing rules"
 
 type subsetScheduleState struct {
 	LastUsed   time.Time
@@ -301,7 +300,7 @@ func (a *App) pickCredential(raw []byte) ([]byte, error) {
 		}
 	}
 	if len(allowed) == 0 {
-		return ErrorEnvelope("no_routed_credential", noRoutedCredentialMessage, http.StatusServiceUnavailable), nil
+		return a.refuseRoute(req.Model, decision), nil
 	}
 	// CPA enriches scheduler metadata before credential selection. Do not infer a
 	// session from request IDs or from later, asynchronous usage records.
@@ -315,7 +314,34 @@ func (a *App) pickCredential(raw []byte) ([]byte, error) {
 	}
 	id := a.scheduler.pick(scope, routingPoolKey(req.Provider, req.Model, decision), session, allowed, a.store.Now())
 	if id == "" {
-		return ErrorEnvelope("no_routed_credential", noRoutedCredentialMessage, http.StatusServiceUnavailable), nil
+		return a.refuseRoute(req.Model, decision), nil
 	}
 	return OKEnvelope(SchedulerPickResponse{AuthID: id, Handled: true})
+}
+
+// The host offers only credentials it can use now, so a routed request left
+// without a candidate either has its allowed credentials unavailable or has no
+// allowed credential serving the model; hosts without host.auth.models cannot
+// tell which. A refusal reaches request.complete only as its message, which the
+// route log maps back to the result.
+type routingShortfall struct{ result, message string }
+
+var (
+	routeUnavailable  = routingShortfall{"unavailable", "The upstream credentials allowed by this API key's routing rules are unavailable for this model"}
+	routeNoCredential = routingShortfall{"no_credential", "None of the upstream credentials allowed by this API key's routing rules serves this model"}
+	routeNoMatch      = routingShortfall{"no_match", "No available upstream credentials match the routing rules"}
+	routingShortfalls = []routingShortfall{routeUnavailable, routeNoCredential, routeNoMatch}
+)
+
+func (a *App) refuseRoute(model string, decision billing.RoutingDecision) []byte {
+	shortfall := routeNoMatch
+	if a.authModelsSupported.Load() {
+		if provided, err := a.credentialModels(decision); err == nil {
+			shortfall = routeNoCredential
+			if provided[billing.ModelWithoutThinkingSuffix(model)] {
+				shortfall = routeUnavailable
+			}
+		}
+	}
+	return ErrorEnvelope("no_routed_credential", shortfall.message, http.StatusServiceUnavailable)
 }

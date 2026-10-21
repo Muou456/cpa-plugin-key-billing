@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"cpa-key-billing/internal/billing"
@@ -135,8 +136,13 @@ func (a *App) finishRouteLog(completion RequestCompletion) {
 	} else if pending.CredentialRestricted {
 		if pending.CredentialResult != "" {
 			row["credential_result"] = pending.CredentialResult
-		} else if completion.StatusCode == 503 && strings.Contains(completion.Error, noRoutedCredentialMessage) {
-			row["credential_result"] = "no_match"
+		} else if completion.StatusCode == http.StatusServiceUnavailable {
+			for _, shortfall := range routingShortfalls {
+				if strings.Contains(completion.Error, shortfall.message) {
+					row["credential_result"] = shortfall.result
+					break
+				}
+			}
 		}
 	}
 	if pending.CredentialRestricted && pending.SelectedCredentialID != "" {
@@ -158,8 +164,11 @@ func (a *App) finishRouteLog(completion RequestCompletion) {
 		return
 	}
 	level := billing.PluginLogDebug
-	if result := row["credential_result"]; result == "deny" || result == "unverified" || result == "configuration_error" {
+	switch row["credential_result"] {
+	case "deny", "unverified", "configuration_error", routeNoCredential.result:
 		level = billing.PluginLogError
+	case routeUnavailable.result, routeNoMatch.result:
+		level = billing.PluginLogInfo
 	}
 	a.store.AddPluginLog(level, "route %s", raw)
 }

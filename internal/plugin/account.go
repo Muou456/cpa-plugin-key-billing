@@ -84,7 +84,7 @@ func (a *App) accountRouting(access viewAccess) ManagementResponse {
 	response := accountRoutingResponse{
 		Models: decision.Models, DeniedModels: decision.DeniedModels,
 		Credentials: []accountRouteCredential{}, DeniedCredentials: []accountRouteCredential{},
-		RoutingValid: decision.ConfigurationError == "", CatalogFiltered: a.filtersModelCatalogs.Load(), Warnings: []string{},
+		RoutingValid: decision.ConfigurationError == "", CatalogFiltered: a.filtersModelCatalogs(), Warnings: []string{},
 	}
 	if decision.ConfigurationError != "" {
 		response.Warnings = append(response.Warnings, "The routing rule no longer exists; contact your administrator")

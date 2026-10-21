@@ -31,7 +31,7 @@ func catalogApp(t *testing.T, rule billing.RouteRule) *App {
 	t.Helper()
 	app := restrictApp(t, rule)
 	app.SetHostCaller(catalogHost(t))
-	app.filtersModelCatalogs.Store(true)
+	app.authModelsSupported.Store(true)
 	return app
 }
 

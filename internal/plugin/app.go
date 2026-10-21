@@ -27,7 +27,7 @@ type App struct {
 	scheduler             subsetScheduler
 	pending               map[string]pendingRouteLog
 	pendingSequence       uint64
-	filtersModelCatalogs  atomic.Bool
+	authModelsSupported   atomic.Bool
 }
 
 func (a *App) SetHostCaller(caller HostCaller) {
@@ -138,7 +138,7 @@ func (a *App) configure(raw []byte) error {
 	}(); errConfigure != nil {
 		return errConfigure
 	}
-	a.filtersModelCatalogs.Store(cfg.Enabled && a.probeCredentialModels())
+	a.authModelsSupported.Store(a.probeHostAuthModels())
 	// Refresh records its result; a download failure does not disable custom prices.
 	_, _ = a.store.EnsureReferencePrices()
 	return nil
@@ -195,7 +195,7 @@ func (a *App) registration() Registration {
 		},
 		Capabilities: Capabilities{
 			RequestInterceptor:        true,
-			ResponseInterceptor:       a.filtersModelCatalogs.Load(),
+			ResponseInterceptor:       a.filtersModelCatalogs(),
 			RequestLifecyclePlugin:    true,
 			UsagePlugin:               true,
 			ManagementAPI:             true,
