@@ -2019,10 +2019,8 @@ body:not(.embedded) #keys-import-labels { display: none; }
   font-weight: 600;
 }
 /* Host table header fills would stand out on the card or tooltip around this table. */
-.model-usage-table { --table-header-bg: transparent; width: 100%; font-size: 12px; overflow-wrap: normal; }
+.model-usage-table { --table-header-bg: transparent; font-size: 12px; white-space: nowrap; }
 .model-usage-table th, .model-usage-table td { padding: 4px 8px; }
-.model-usage-table th { white-space: normal; }
-.model-usage-table td { white-space: nowrap; }
 .model-usage-table tfoot td { border-bottom: 0; color: var(--text-primary); font-weight: 600; }
 .hover-tooltip:has(.model-usage-table) { max-width: min(720px, calc(100vw - 24px)); overflow-x: auto; }
 .event-load-state {
