@@ -301,15 +301,8 @@ func (a *App) observeCandidates(candidates []SchedulerAuthCandidate) {
 	}
 }
 
-func (a *App) observeCredentialUsage(authIndex, authType, source, scope string) {
-	if !strings.EqualFold(strings.TrimSpace(authType), "apikey") {
-		return
-	}
-	if billing.CallerScope(source) == strings.TrimSpace(scope) {
-		return
-	}
-	name := billing.PreviewKey(source)
-	if name == "" {
+func (a *App) observeCredentialUsage(authIndex, authType, account string) {
+	if !strings.EqualFold(strings.TrimSpace(authType), "apikey") || account == "" {
 		return
 	}
 	a.routingMu.Lock()
@@ -319,7 +312,7 @@ func (a *App) observeCredentialUsage(authIndex, authType, source, scope string) 
 	if !ok || credential.Source != billing.CredentialSourceAIProviders {
 		return
 	}
-	credential.DisplayName = name
+	credential.DisplayName = account
 	credential.DisplayMessage = messages.Message{}
 	a.credentials[ref] = credential
 }

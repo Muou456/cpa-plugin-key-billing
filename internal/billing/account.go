@@ -43,16 +43,6 @@ func (s *Store) recordUsage(event UsageEvent, failure *RequestError) {
 	scope := strings.TrimSpace(event.Scope)
 	provider := strings.TrimSpace(event.Provider)
 	authType := strings.ToLower(strings.TrimSpace(event.AuthType))
-	account := ""
-	switch authType {
-	case "apikey":
-		account = PreviewKey(event.Account)
-	case "oauth":
-		// The host may fall back to the downstream API key when no account is available.
-		if CallerScope(event.Account) != normalizeScope(scope) {
-			account = strings.TrimSpace(event.Account)
-		}
-	}
 	at := event.At
 	if at.IsZero() {
 		at = s.Now()
@@ -103,7 +93,7 @@ func (s *Store) recordUsage(event UsageEvent, failure *RequestError) {
 			Scope:               scope,
 			AuthIndex:           event.AuthIndex,
 			Provider:            provider,
-			Account:             account,
+			Account:             event.Account,
 			ExecutorType:        event.ExecutorType,
 			ReasoningEffort:     event.ReasoningEffort,
 			ServiceTier:         event.ServiceTier,

@@ -337,7 +337,7 @@ func TestAIProviderCredentialLearnsMaskedAPIKeyFromUsage(t *testing.T) {
 	const upstreamKey = "sk-dummy-upstream-secret-1234"
 	app.observeCandidates([]SchedulerAuthCandidate{{ID: "config-codex", Provider: "codex", Attributes: map[string]string{"source": "config:codex[abc]"}}})
 	app.observeRouteCredential(RequestInterceptRequest{Metadata: map[string]any{MetadataSelectedAuth: "config-codex", MetadataSelectedIndex: "auth-index"}}, "unrestricted", "")
-	app.observeCredentialUsage("auth-index", "apikey", upstreamKey, "downstream-scope")
+	publishUsageRecord(t, app, UsageRecord{Provider: "codex", APIKey: "downstream-key", AuthIndex: "auth-index", AuthType: "apikey", Source: upstreamKey})
 
 	credentials := app.credentialInventory()
 	if len(credentials) != 1 || credentials[0].DisplayName != billing.PreviewKey(upstreamKey) {
@@ -347,7 +347,7 @@ func TestAIProviderCredentialLearnsMaskedAPIKeyFromUsage(t *testing.T) {
 		t.Fatalf("credential display name leaked upstream key: %q", credentials[0].DisplayName)
 	}
 
-	app.observeCredentialUsage("auth-index", "apikey", "downstream-key", billing.CallerScope("downstream-key"))
+	publishUsageRecord(t, app, UsageRecord{Provider: "codex", APIKey: "downstream-key", AuthIndex: "auth-index", AuthType: "apikey", Source: "downstream-key"})
 	if got := app.credentialInventory()[0].DisplayName; got != billing.PreviewKey(upstreamKey) {
 		t.Fatalf("downstream key fallback replaced credential display name: %q", got)
 	}

@@ -288,7 +288,7 @@ func (a *App) handleUsage(raw []byte) ([]byte, error) {
 		ExecutorType:        record.ExecutorType,
 		AuthType:            record.AuthType,
 		Quota:               usageQuotaReport(record, at),
-		Account:             record.Source,
+		Account:             a.usageAccount(record),
 		ReasoningEffort:     record.ReasoningEffort,
 		ServiceTier:         record.ServiceTier,
 		ResponseServiceTier: record.ResponseServiceTier,
@@ -306,7 +306,7 @@ func (a *App) handleUsage(raw []byte) ([]byte, error) {
 	} else {
 		a.store.RecordUsage(event)
 	}
-	a.observeCredentialUsage(record.AuthIndex, record.AuthType, record.Source, scope)
+	a.observeCredentialUsage(record.AuthIndex, record.AuthType, event.Account)
 	return OKEnvelope(struct{}{})
 }
 

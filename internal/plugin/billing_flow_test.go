@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"encoding/json"
 	"math"
 	"net/http"
 	"os"
@@ -105,12 +106,19 @@ func TestUsageHandleUsesClientKeyModelAliasAndCredential(t *testing.T) {
 	if response := interceptWithID(t, app, "metadata-trace", true); response.Terminate {
 		t.Fatalf("request rejected: %+v", response)
 	}
+	app.SetHostCaller(func(method string, payload any) (json.RawMessage, error) {
+		if method != hostAuthGetRuntime || payload.(map[string]string)["auth_index"] != "auth-7" {
+			t.Fatalf("unexpected host call: %s %+v", method, payload)
+		}
+		return json.RawMessage(`{"auth":{"name":"codex-team.json","path":"/auths/codex-team.json"}}`), nil
+	})
 	stream := true
+	// The host reports the caller's own key for an auth file without an email.
 	publishUsageRecord(t, app, UsageRecord{
 		TraceID: "metadata-trace", Stream: &stream,
 		Provider: "codex", ExecutorType: "CodexExecutor", Model: flowModel, Alias: "route/gpt-5.5",
 		ResponseModel: "gpt-5.6-luna", APIKey: testAPIKey, AuthIndex: "auth-7", AuthType: "oauth",
-		Source: "billing@example.com", ReasoningEffort: "high", ServiceTier: "priority", ResponseServiceTier: "default",
+		Source: testAPIKey, ReasoningEffort: "high", ServiceTier: "priority", ResponseServiceTier: "default",
 		Generate: true, RequestedAt: app.store.Now(), Latency: 1500 * time.Millisecond, TTFT: 250 * time.Millisecond,
 		Detail: UsageDetail{InputTokens: 1000, OutputTokens: 500, TotalTokens: 1500},
 	})
@@ -124,7 +132,7 @@ func TestUsageHandleUsesClientKeyModelAliasAndCredential(t *testing.T) {
 		entry.ReasoningEffort != "high" || entry.ServiceTier != "priority" ||
 		entry.ResponseServiceTier != "default" || entry.ResponseModel != "gpt-5.6-luna" ||
 		entry.UpstreamModel != flowModel || entry.BillingModel != "route/gpt-5.5" || entry.Failed ||
-		entry.Source != "codex · billing@example.com" || entry.AccountingQuality != billing.TokenAccountingComplete ||
+		entry.Source != "codex · codex-team" || entry.AccountingQuality != billing.TokenAccountingComplete ||
 		entry.LatencyMS != 1500 || entry.TTFTMS != 250 ||
 		entry.Endpoint != "/v1/responses" || entry.Transport != "http" || entry.Stream == nil || !*entry.Stream {
 		t.Fatalf("entry = %+v", entry)

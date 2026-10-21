@@ -16,7 +16,8 @@ type ExecutionMetadata struct {
 }
 
 // RequestEvent is one persisted request record and never stores a plaintext API key.
-// Account contains only an OAuth identity or masked API key.
+// Account names the upstream credential by an OAuth identity, a masked API key
+// or an auth file title.
 type RequestEvent struct {
 	Execution           *ExecutionMetadata `json:"execution,omitempty"`
 	Endpoint            string             `json:"endpoint,omitempty"`

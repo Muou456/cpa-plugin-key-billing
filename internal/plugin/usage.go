@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"math"
 	"net/url"
 	"strings"
@@ -323,4 +324,33 @@ func (record UsageRecord) executionMetadata() *billing.ExecutionMetadata {
 		return nil
 	}
 	return metadata
+}
+
+// usageAccount names the upstream credential of a usage record. The host
+// reports the caller's own key for a credential without an account; an auth
+// file is then named by its title, and other credentials stay unnamed.
+func (a *App) usageAccount(record UsageRecord) string {
+	if account := strings.TrimSpace(record.Source); account != "" && account != strings.TrimSpace(record.APIKey) {
+		switch strings.ToLower(strings.TrimSpace(record.AuthType)) {
+		case "apikey":
+			return billing.PreviewKey(account)
+		case "oauth":
+			return account
+		}
+	}
+	index := strings.TrimSpace(record.AuthIndex)
+	if index == "" || a.hostCaller == nil {
+		return ""
+	}
+	raw, err := a.hostCaller(hostAuthGetRuntime, map[string]string{"auth_index": index})
+	if err != nil {
+		return ""
+	}
+	var response struct {
+		Auth hostAuthFile `json:"auth"`
+	}
+	if json.Unmarshal(raw, &response) != nil || credentialSourceFromHost(response.Auth) != billing.CredentialSourceAuthFiles {
+		return ""
+	}
+	return authFileTitle(response.Auth)
 }
