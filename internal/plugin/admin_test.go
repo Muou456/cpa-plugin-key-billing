@@ -277,14 +277,13 @@ func TestManagementErrorsMapToStatusCodes(t *testing.T) {
 }
 
 // The plaintext keys the panel pushes are hashed into caller scopes and
-// dropped; what comes back must name them by mask alone.
-func TestSyncKeysStoresOnlyMaskedKeys(t *testing.T) {
+// dropped; what comes back must name them by mask alone, in the pushed order.
+func TestSyncKeysStoresMaskedKeysInConfigOrder(t *testing.T) {
 	app := newConfiguredApp(t)
+	alpha, beta := "sk-alpha-000000001", "sk-beta-0000000002"
 
 	var result billing.SyncResult
-	callOK(t, app, http.MethodPost, routeKeysSync, nil, map[string]any{
-		"keys": []string{"sk-alpha-000000001", "sk-beta-0000000002"},
-	}, http.StatusOK, &result)
+	callOK(t, app, http.MethodPost, routeKeysSync, nil, map[string]any{"keys": []string{alpha, beta}}, http.StatusOK, &result)
 	if result.Added != 2 {
 		t.Fatalf("result = %+v", result)
 	}
@@ -299,6 +298,12 @@ func TestSyncKeysStoresOnlyMaskedKeys(t *testing.T) {
 		}
 		if strings.Contains(view.Preview, "alpha") || strings.Contains(view.Preview, "beta") {
 			t.Fatalf("Preview = %q leaks the key body", view.Preview)
+		}
+	}
+	for _, order := range [][]string{{beta, alpha}, {alpha, beta}} {
+		callOK(t, app, http.MethodPost, routeKeysSync, nil, map[string]any{"keys": order}, http.StatusOK, nil)
+		if keys := readKeys(t, app); keys[0].Scope != billing.CallerScope(order[0]) || keys[1].Scope != billing.CallerScope(order[1]) {
+			t.Fatalf("keys = %+v, want them in the synced order", keys)
 		}
 	}
 

@@ -1,7 +1,8 @@
 package billing
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -40,7 +41,7 @@ func (s *Store) KeyViews() []KeyView {
 			}
 			views = append(views, keyView(scope, key, plans[key.PlanID], s.activeByScope[scope], now))
 		}
-		sortKeyViews(views)
+		sortKeyViews(views, s.configOrder)
 		return views, Changes{Keys: settled}
 	})
 }
@@ -98,16 +99,21 @@ func (s *Store) KeyViewForScope(scope string) (KeyView, bool) {
 	return current.view, current.ok
 }
 
-func sortKeyViews(views []KeyView) {
-	sort.Slice(views, func(i, j int) bool {
-		if views[i].Blocked != views[j].Blocked {
-			return views[i].Blocked
+// Keys CPA holds keep their configuration order, as its panels list them; the
+// rest follow by label.
+func sortKeyViews(views []KeyView, configOrder map[string]int) {
+	rank := func(scope string) int {
+		if position, listed := configOrder[scope]; listed {
+			return position
 		}
-		left, right := strings.ToLower(views[i].Label), strings.ToLower(views[j].Label)
-		if left != right {
-			return left < right
-		}
-		return views[i].Scope < views[j].Scope
+		return len(configOrder)
+	}
+	slices.SortFunc(views, func(a, b KeyView) int {
+		return cmp.Or(
+			cmp.Compare(rank(a.Scope), rank(b.Scope)),
+			cmp.Compare(strings.ToLower(a.Label), strings.ToLower(b.Label)),
+			cmp.Compare(a.Scope, b.Scope),
+		)
 	})
 }
 
@@ -269,12 +275,14 @@ func (s *State) ensureKey(scope, preview string) *KeyState {
 // and explicit resets still apply.
 func (s *Store) SyncKeys(keys []string, allowEmpty bool) (SyncResult, error) {
 	scopes := make(map[string]string, len(keys))
+	order := make(map[string]int, len(keys))
 	for _, key := range keys {
 		scope := CallerScope(key)
-		if scope == "" {
+		if _, listed := scopes[scope]; scope == "" || listed {
 			continue
 		}
 		scopes[scope] = PreviewKey(key)
+		order[scope] = len(order)
 	}
 	if len(scopes) == 0 && !allowEmpty {
 		return SyncResult{}, invalidf("The API key list is empty; pass allow_empty to clear it")
@@ -282,7 +290,7 @@ func (s *Store) SyncKeys(keys []string, allowEmpty bool) (SyncResult, error) {
 
 	now := s.Now()
 
-	return editConfiguration(s, func(state *State) (SyncResult, Changes, error) {
+	result, err := editConfiguration(s, func(state *State) (SyncResult, Changes, error) {
 		var result SyncResult
 		changed := false
 		for scope, preview := range scopes {
@@ -319,6 +327,12 @@ func (s *Store) SyncKeys(keys []string, allowEmpty bool) (SyncResult, error) {
 		}
 		return result, Changes{AllKeys: true}, nil
 	})
+	if err == nil {
+		s.mu.Lock()
+		s.configOrder = order
+		s.mu.Unlock()
+	}
+	return result, err
 }
 
 // Scopes are hex digests, so case folding is safe for hand-typed input.

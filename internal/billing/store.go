@@ -36,6 +36,10 @@ type Store struct {
 	// reported, so retries against one do not repeat it.
 	blocked blockedKeys
 
+	// configOrder is each key's position in the list CPA last synced. It is not
+	// persisted: the admin UI syncs that list before it reads the keys.
+	configOrder map[string]int
+
 	errMu     sync.Mutex
 	lastError string
 
