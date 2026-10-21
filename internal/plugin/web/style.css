@@ -1363,6 +1363,8 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-cache-cell { grid-area: cache; }
   .credential-quota-cell { grid-area: quota; }
   .credential-actions-cell { grid-area: actions; }
+  /* Cards drop actions that never apply to the row; the table keeps the column. */
+  .credential-actions-cell.unavailable { display: none; }
   .auth-quota-actions { flex-direction: row; }
   .credential-metric-label { display: block; }
   .credential-metric-detail.inline { display: inline-flex; gap: 0; margin: 0 0 0 4px; font-size: inherit; }
@@ -1380,6 +1382,9 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   }
   .credential-table .credential-row:has(> .credential-plan-cell) {
     grid-template-areas: "identity identity" "plan expiry" "requests success" "tokens cache" "quota quota" "actions actions";
+  }
+  .credential-table .credential-row:has(> .credential-actions-cell.unavailable) {
+    grid-template-areas: "identity identity" "requests success" "tokens cache" "quota quota";
   }
   .auth-quota-list { grid-template-columns: minmax(0, 1fr); }
   .credential-actions { --button-min-height: 30px; }

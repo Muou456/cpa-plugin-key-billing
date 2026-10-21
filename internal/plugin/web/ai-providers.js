@@ -484,7 +484,7 @@ function renderAIProviderRow(provider) {
     el("td", { class: "credential-quota-cell" }, renderAIBalance(provider)),
     el(
       "td",
-      { class: "credential-actions-cell" },
+      { class: "credential-actions-cell" + (upstream ? "" : " unavailable") },
       el(
         "div",
         { class: "credential-actions" },
