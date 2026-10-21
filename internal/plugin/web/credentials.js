@@ -283,23 +283,23 @@ function credentialUsageSummary(usage) {
   };
 }
 
-function credentialUsageMetric(name, label, value, secondary) {
+function credentialMetric(name, label, value, secondary) {
   const detail =
     secondary &&
     el(
       "span",
-      { class: "credential-usage-detail" + (secondary.inline ? " inline" : "") },
-      el("span", { class: "credential-usage-detail-label", text: secondary.label }),
-      el("span", { class: "credential-usage-detail-value", text: secondary.value })
+      { class: "credential-metric-detail" + (secondary.inline ? " inline" : "") },
+      secondary.label && el("span", { class: "credential-metric-detail-label", text: secondary.label }),
+      el("span", { class: "credential-metric-detail-value", text: secondary.value })
     );
   return el(
     "td",
     { class: "credential-" + name + "-cell" },
     el(
       "div",
-      { class: "credential-usage-metric" },
-      el("span", { class: "credential-usage-label", text: label }),
-      el("span", { class: "credential-usage-value" }, value, secondary?.inline && detail)
+      { class: "credential-metric" },
+      el("span", { class: "credential-metric-label", text: label }),
+      el("span", { class: "credential-metric-value" }, value, secondary?.inline && detail)
     ),
     !secondary?.inline && detail
   );
@@ -310,9 +310,9 @@ function credentialUsageMetric(name, label, value, secondary) {
 function renderCredentialUsage(usage, breakdown) {
   if (!usage) {
     return [
-      credentialUsageMetric("requests", m("ui.requests"), "—"),
-      credentialUsageMetric("tokens", m("ui.auth_total_tokens"), "—"),
-      credentialUsageMetric("cache", m("ui.cache_rate"), "—")
+      credentialMetric("requests", m("ui.requests"), "—"),
+      credentialMetric("tokens", m("ui.auth_total_tokens"), "—"),
+      credentialMetric("cache", m("ui.cache_rate"), "—")
     ];
   }
   const { count, failed, success, total, cache } = credentialUsageSummary(usage);
@@ -327,12 +327,12 @@ function renderCredentialUsage(usage, breakdown) {
     ")"
   ];
   return [
-    credentialUsageMetric("requests", m("ui.requests"), requests, { label: m("ui.success_rate"), value: success }),
-    credentialUsageMetric("tokens", m("ui.auth_total_tokens"), totalTokens, {
+    credentialMetric("requests", m("ui.requests"), requests, { label: m("ui.success_rate"), value: success }),
+    credentialMetric("tokens", m("ui.auth_total_tokens"), totalTokens, {
       label: m("ui.cost"),
       value: usd(usage.cost_usd, 2),
       inline: true
     }),
-    credentialUsageMetric("cache", m("ui.cache_rate"), cache)
+    credentialMetric("cache", m("ui.cache_rate"), cache)
   ];
 }

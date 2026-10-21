@@ -1143,11 +1143,18 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
 .credential-row.disabled > :not(.credential-actions-cell) { opacity: 0.68; }
 .credential-request-success { color: var(--success-badge-text); }
 .credential-request-failed { color: var(--failure-badge-text); }
-.credential-usage-metric { display: grid; gap: 3px; min-width: 0; }
-.credential-usage-label { display: none; color: var(--text-tertiary); font-size: 11px; }
-.credential-usage-detail { display: flex; align-items: baseline; gap: 4px; margin-top: 3px; color: var(--text-secondary); font-size: 11px; }
-.credential-usage-value { color: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; }
-.credential-usage-value, .credential-usage-detail-label, .credential-usage-detail-value { white-space: nowrap; }
+.credential-metric { display: grid; gap: 3px; min-width: 0; }
+.credential-metric-label { display: none; color: var(--text-tertiary); font-size: 11px; }
+.credential-metric-detail {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.credential-metric-value { color: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; }
+.credential-metric-value, .credential-metric-detail-label, .credential-metric-detail-value { white-space: nowrap; }
 .credential-head { display: flex; align-items: center; gap: 10px; min-width: 0; width: max-content; max-width: 100%; }
 .credential-identity { min-width: 0; max-width: 280px; flex: 1; }
 .credential-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1329,26 +1336,30 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-table thead { display: none; }
   .credential-table .credential-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
     grid-template-areas: "identity identity actions" "requests tokens cache" "quota quota quota";
     gap: 16px;
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
   }
+  .credential-table .credential-row:has(> .credential-plan-cell) {
+    grid-template-areas: "identity identity identity actions" "plan requests tokens cache" "quota quota quota quota";
+  }
   .credential-table .credential-row:last-child { border-bottom: none; }
   .credential-table td { display: block; min-width: 0; padding: 0; border: none; }
   .credential-identity-cell { grid-area: identity; }
+  .credential-plan-cell { grid-area: plan; }
   .credential-requests-cell { grid-area: requests; }
   .credential-tokens-cell { grid-area: tokens; }
   .credential-cache-cell { grid-area: cache; }
   .credential-quota-cell { grid-area: quota; }
   .credential-actions-cell { grid-area: actions; }
   .auth-quota-actions { flex-direction: row; }
-  .credential-usage-label { display: block; }
-  .credential-usage-detail.inline { display: inline-flex; gap: 0; margin: 0 0 0 4px; font-size: inherit; }
-  .credential-usage-detail.inline .credential-usage-detail-label { display: none; }
-  .credential-usage-detail.inline::before { content: "("; }
-  .credential-usage-detail.inline::after { content: ")"; }
+  .credential-metric-label { display: block; }
+  .credential-metric-detail.inline { display: inline-flex; gap: 0; margin: 0 0 0 4px; font-size: inherit; }
+  .credential-metric-detail.inline .credential-metric-detail-label { display: none; }
+  .credential-metric-detail.inline::before { content: "("; }
+  .credential-metric-detail.inline::after { content: ")"; }
   .auth-quota-list { gap: 10px 16px; }
 }
 @container credential-table (max-width: 560px) {
@@ -1358,26 +1369,26 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
     gap: 10px 14px;
     padding: 14px;
   }
+  .credential-table .credential-row:has(> .credential-plan-cell) {
+    grid-template-areas: "identity identity" "plan expiry" "requests success" "tokens cache" "quota quota" "actions actions";
+  }
   .auth-quota-list { grid-template-columns: minmax(0, 1fr); }
   .credential-actions { --button-min-height: 30px; }
-  .credential-table .credential-requests-cell { display: contents; }
-  .credential-requests-cell .credential-usage-metric {
-    grid-area: requests;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 6px;
+  .credential-table :is(.credential-plan-cell, .credential-requests-cell) { display: contents; }
+  .credential-plan-cell .credential-metric { grid-area: plan; }
+  .credential-plan-cell .credential-metric-detail { grid-area: expiry; }
+  .credential-requests-cell .credential-metric { grid-area: requests; }
+  .credential-requests-cell .credential-metric-detail { grid-area: success; }
+  .credential-requests-cell .credential-metric-value { white-space: normal; }
+  :is(.credential-plan-cell, .credential-requests-cell) .credential-metric-detail {
+    align-self: start;
+    gap: 6px;
+    margin: 0;
+    font-size: 13px;
   }
-  .credential-requests-cell .credential-usage-value { white-space: normal; }
-  .credential-requests-cell .credential-usage-detail { grid-area: success; align-self: start; gap: 6px; margin: 0; font-size: 13px; }
-  .credential-usage-detail-label { color: var(--text-tertiary); font-size: 11px; }
-  .credential-usage-detail-value { color: var(--text-primary); }
-  .credential-tokens-cell .credential-usage-metric, .credential-cache-cell .credential-usage-metric {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 6px;
-  }
+  .credential-metric-detail-label { color: var(--text-tertiary); font-size: 11px; }
+  .credential-metric-detail-value { color: var(--text-primary); }
+  .credential-table .credential-metric { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
 }
 dialog, .time-range-popover { max-height: 80dvh; }
 dialog {

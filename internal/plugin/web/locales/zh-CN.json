@@ -19,6 +19,7 @@
   "ui.request": "请求",
   "ui.error_events": "错误事件",
   "ui.auth_files": "认证文件",
+  "ui.plan": "套餐",
   "ui.credential_routing": "优先级：{priority} · 权重：{weight}",
   "ui.settings": "设置",
   "ui.filter_by_api_key": "按 API Key 筛选",

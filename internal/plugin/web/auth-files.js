@@ -1,23 +1,3 @@
-// Tag tones for the plan labels the backend reports, per provider: a Claude Pro is not a Codex Pro 200.
-// Antigravity reports its upstream tier name as is.
-const AUTH_PLAN_TONES = {
-  codex: {
-    elite: ["pro500", "pro200"],
-    premium: ["pro100", "businesspremium"],
-    info: ["plus"],
-    ok: ["go"],
-    business: ["business", "enterprise", "enterpriseautomation"]
-  },
-  claude: { premium: ["max"], info: ["pro"], business: ["team"] },
-  antigravity: { elite: ["ultra", "googleaiultra"], premium: ["ultralite", "googleaiultralite"], info: ["pro", "googleaipro"] },
-  xai: { premium: ["paid"] }
-};
-
-function authPlanTone(category, plan) {
-  const key = plan.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return Object.entries(AUTH_PLAN_TONES[category] || {}).find(([, plans]) => plans.includes(key))?.[0] || "plain";
-}
-
 function authFileQuota(file, owner) {
   const manual = owner.authQuotas.get(file.auth_index);
   const observed = file.quota;
@@ -42,14 +22,22 @@ function authQuotaWindowKey(row) {
   return JSON.stringify([row.limit_key || "", row.group_label || "", row.label_prefix || "", row.label || ""]);
 }
 
-function authFileMeta(file, quota) {
-  const plan = quota?.plan?.trim();
+function authFileMeta(file) {
   return el(
     "div",
     { class: "credential-meta" },
-    plan && el("span", { class: "tag " + authPlanTone(file.category, plan) }, el("span", { text: plan })),
     credentialRoutingTag(file),
     file.unavailable && el("span", { class: "tag bad", text: m("ui.unavailable") })
+  );
+}
+
+function renderAuthFilePlan(file, quota) {
+  const left = file.subscription_until - Date.now();
+  return credentialMetric(
+    "plan",
+    m("ui.plan"),
+    quota?.plan?.trim() || "—",
+    left > 0 && { value: m("time.left_day", { count: Math.ceil(left / 86400000) }) }
   );
 }
 
@@ -117,10 +105,16 @@ function restoreAuthQuotaCache(account) {
   }
 }
 
-async function readAuthFileWeights() {
+// CPA's own list has what host callbacks omit: routing weights and the subscription end in a Codex ID token.
+async function readCPAAuthFiles() {
   try {
     const result = await api("GET", "/v0/management/auth-files", null, { keepSessionOnForbidden: true });
-    return new Map(requireArray(result?.files, m("ui.auth_files")).map((file) => [file.auth_index, file.weight ?? 1]));
+    return new Map(
+      requireArray(result?.files, m("ui.auth_files")).map((file) => [
+        file.auth_index,
+        { weight: file.weight ?? 1, subscription_until: Date.parse(file.id_token?.chatgpt_subscription_active_until) }
+      ])
+    );
   } catch (err) {
     if (err instanceof AuthError || err instanceof StaleRequestError) throw err;
     return new Map();
@@ -134,14 +128,11 @@ function readAuthFiles(account, reload = false) {
     async () => {
       const range = selectedRange(account);
       const path = "/auth-files?" + new URLSearchParams(range);
-      const [result, weights] = await Promise.all([
-        account ? accountAPI(path) : plugin("GET", path),
-        account ? null : readAuthFileWeights()
-      ]);
+      const [result, details] = await Promise.all([account ? accountAPI(path) : plugin("GET", path), account ? null : readCPAAuthFiles()]);
       // A breakdown selects the same requests as its total.
       return requireArray(result?.files, m("ui.auth_files")).map((file) => ({
         ...file,
-        weight: weights?.get(file.auth_index),
+        ...details?.get(file.auth_index),
         usage_query: { auth_index: file.auth_index, ...range }
       }));
     },
@@ -377,6 +368,7 @@ function renderAuthFiles(account) {
   renderCollection(ui.body, files, {
     headers: [
       m("ui.auth_files"),
+      m("ui.plan"),
       m("ui.requests"),
       m("ui.auth_total_tokens"),
       m("ui.cache_rate"),
@@ -445,10 +437,11 @@ function renderAuthFileRow(file, account) {
             "data-tip-overflow": "",
             text: file.email || file.name || m("ui.no_email_provided")
           }),
-          authFileMeta(file, quota)
+          authFileMeta(file)
         )
       )
     ),
+    renderAuthFilePlan(file, quota),
     renderCredentialUsage(file.usage, modelUsageTooltip(account, file.usage_query)),
     el(
       "td",
@@ -725,7 +718,7 @@ function renderAuthDrawerFile() {
         "data-tip-overflow": "",
         text: title || m("ui.no_email_provided")
       }),
-      authFileMeta(file, authFileQuota(file, ui.owner))
+      authFileMeta(file)
     )
   );
   renderAuthDrawerResets(file, authDrawer.account);
@@ -845,6 +838,26 @@ function renderAuthDrawerPeriods() {
       ? el("div", { class: "quota-period-list" }, window.periods.map((period) => renderQuotaPeriod(period, file.category, account)))
       : el("div", { class: "muted small", text: m("ui.no_quota_windows_reported") })
   );
+}
+
+// Tag tones for the plan labels the backend reports, per provider: a Claude Pro is not a Codex Pro 200.
+// Antigravity reports its upstream tier name as is.
+const AUTH_PLAN_TONES = {
+  codex: {
+    elite: ["pro500", "pro200"],
+    premium: ["pro100", "businesspremium"],
+    info: ["plus"],
+    ok: ["go"],
+    business: ["business", "enterprise", "enterpriseautomation"]
+  },
+  claude: { premium: ["max"], info: ["pro"], business: ["team"] },
+  antigravity: { elite: ["ultra", "googleaiultra"], premium: ["ultralite", "googleaiultralite"], info: ["pro", "googleaipro"] },
+  xai: { premium: ["paid"] }
+};
+
+function authPlanTone(category, plan) {
+  const key = plan.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return Object.entries(AUTH_PLAN_TONES[category] || {}).find(([, plans]) => plans.includes(key))?.[0] || "plain";
 }
 
 // Estimates need the usage of every request, which API key views do not have.

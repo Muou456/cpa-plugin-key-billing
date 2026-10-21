@@ -19,6 +19,7 @@
   "ui.request": "Request",
   "ui.error_events": "Error events",
   "ui.auth_files": "Auth Files",
+  "ui.plan": "Plan",
   "ui.credential_routing": "Priority: {priority} · Weight: {weight}",
   "ui.settings": "Settings",
   "ui.filter_by_api_key": "Filter by API key",

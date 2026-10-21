@@ -371,6 +371,7 @@ AUTH_FILES = [
         "unavailable": False,
         "priority": 10,
         "weight": 10,
+        "id_token": {"chatgpt_subscription_active_until": iso(NOW + timedelta(days=12, hours=5))},
         "quota_supported": True,
     },
     {
@@ -392,6 +393,7 @@ AUTH_FILES = [
         "unavailable": False,
         "priority": 99,
         "weight": 1000000,
+        "id_token": {"chatgpt_subscription_active_until": iso(NOW + timedelta(hours=20))},
         "quota_supported": True,
     },
     {
@@ -528,7 +530,7 @@ def auth_file_views(files, query, scope=""):
     views = []
     for index, item in enumerate(files):
         rows = [entry for entry in entries if entry["auth_index"] == item["auth_index"]]
-        view = {field: value for field, value in item.items() if field != "weight"}
+        view = {field: value for field, value in item.items() if field not in ("weight", "id_token")}
         view["usage"] = credential_usage(rows)
         if item["category"] in ("codex", "claude"):
             quota = auth_file_quota({"auth_index": [item["auth_index"]]})
@@ -1727,7 +1729,7 @@ def payload_for(path, query):
         return {"entries": entries[:limit], "level_counts": counts,
                 "next_before_id": entries[limit - 1]["id"] if len(entries) > limit else 0}
     if path == "/v0/management/auth-files":
-        return {"files": [{field: item[field] for field in ("auth_index", "weight") if field in item}
+        return {"files": [{field: item[field] for field in ("auth_index", "weight", "id_token") if field in item}
                           for item in AUTH_FILES]}
     if path == f"{API_BASE}/auth-files":
         return {"files": auth_file_views(AUTH_FILES, query)}
