@@ -31,6 +31,16 @@ HOST_SHELL = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__HOST_LABEL__ · CPA Key Billing 样式预览</title>
+<script>
+{
+  const version="__HOST_MODE__"==="cpamp"?"v2":"v1";
+  const scope=version==="v2"?"v2|"+location.host:location.host+"|"+navigator.userAgent;
+  const secret=new TextEncoder().encode("cli-proxy-api-webui::secure-storage|"+scope);
+  const data=new TextEncoder().encode(JSON.stringify({state:{apiBase:location.origin,managementKey:"dummy",rememberPassword:true},version:0}));
+  const encoded=data.map((byte,index)=>byte^secret[index%secret.length]);
+  localStorage.setItem("cli-proxy-auth","enc::"+version+"::"+btoa(String.fromCharCode(...encoded)));
+}
+</script>
 <style>
 :root{
   --bg-secondary:#faf9f5;--bg-primary:#f0eee8;--bg-tertiary:#e9e6df;--bg-hover:var(--bg-tertiary);
@@ -1857,12 +1867,6 @@ class Handler(BaseHTTPRequestHandler):
                 return (messages if name == "i18n.js" else "") + (UI_DIR / name).read_text()
 
             body = UI_INCLUDE.sub(include, (UI_DIR / "ui.html").read_text())
-            if self.host_mode != "standalone":
-                body = body.replace(
-                    "</head>",
-                    '<script>localStorage.setItem("managementKey", JSON.stringify("dummy"));</script>\n</head>',
-                    1,
-                )
             self.send_html(body)
             return
         authorization = self.headers.get("Authorization", "")
