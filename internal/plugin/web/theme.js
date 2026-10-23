@@ -81,14 +81,12 @@ function panelStoredValue(name) {
   window.billingTheme = {
     current: () => appliedTheme,
     preference: () => selectedTheme,
-    cycle() {
-      const order = ["", "white", "dark"];
-      selectedTheme = order[(order.indexOf(selectedTheme) + 1) % order.length];
+    select(value) {
+      selectedTheme = value;
       try {
         if (selectedTheme) localStorage.setItem(PLUGIN_STORE_KEY, selectedTheme); else localStorage.removeItem(PLUGIN_STORE_KEY);
       } catch (_) {}
       sync();
-      return selectedTheme;
     }
   };
 })();

@@ -1015,34 +1015,34 @@ details[open] > .details-summary .lucide-chevron-icon, .routing-section-toggle[a
 .account-model-price-list { display: grid; gap: 6px; }
 .account-model-price-row {
   display: grid;
-  grid-template-columns: 52px minmax(48px, 1fr) minmax(108px, 1.25fr);
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
   align-items: center;
   gap: 8px;
   min-width: 0;
   min-height: 34px;
-  padding: 6px 9px;
+  padding: 6px 12px;
   border-radius: calc(var(--radius-md) - 2px);
   background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   font-size: 12px;
 }
-.account-model-price-row:not(.tiered) { grid-template-columns: 52px minmax(48px, 1fr); }
+.account-model-price-row:not(.tiered) { grid-template-columns: minmax(0, 1fr) max-content; }
 .account-model-price-label { color: var(--text-tertiary); white-space: nowrap; }
 .account-model-base-price, .account-model-long-price strong {
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.account-model-base-price { justify-self: end; min-width: 52px; text-align: right; }
+.account-model-base-price { justify-self: end; text-align: right; }
 .account-model-long-price {
   display: grid;
-  grid-template-columns: minmax(54px, 1fr) minmax(48px, auto);
+  grid-template-columns: auto auto;
   align-items: baseline;
   gap: 6px;
   min-width: 0;
   padding-left: 8px;
   border-left: 1px solid var(--border-color);
 }
-.account-model-long-price strong { justify-self: end; min-width: 48px; text-align: right; }
+.account-model-long-price strong { justify-self: end; min-width: 5ch; text-align: right; }
 .account-model-threshold {
   justify-self: end;
   padding: 2px 7px;
@@ -1823,8 +1823,8 @@ body:not(.embedded) #keys-import-labels { display: none; }
 }
 .time-range-trigger[aria-expanded="true"] .time-range-chevron { transform: rotate(180deg); }
 .time-range-popover { position: absolute; top: calc(100% + 6px); right: 0; }
-.date-time-popover, .language-menu { position: fixed; margin: 0; inset: auto; color: var(--text-primary); }
-.time-range-popover, .date-time-popover, .language-menu {
+.date-time-popover, .selection-menu { position: fixed; margin: 0; inset: auto; color: var(--text-primary); }
+.time-range-popover, .date-time-popover, .selection-menu {
   z-index: 1200;
   width: min(360px, calc(100vw - 24px));
   overflow: auto;
@@ -1836,9 +1836,9 @@ body:not(.embedded) #keys-import-labels { display: none; }
   transform-origin: top right;
   animation: time-range-in 150ms ease-out both;
 }
-.language-menu { gap: 2px; width: max-content; min-width: 112px; max-width: calc(100vw - 24px); padding: 6px; }
-.language-menu:popover-open { display: grid; }
-:root .language-menu button.language-option {
+.selection-menu { gap: 2px; width: max-content; min-width: 112px; max-width: calc(100vw - 24px); padding: 6px; }
+.selection-menu:popover-open { display: grid; }
+:root .selection-menu button.selection-option {
   width: 100%;
   padding: 8px 12px;
   border-color: transparent;
@@ -1847,12 +1847,12 @@ body:not(.embedded) #keys-import-labels { display: none; }
   color: var(--text-secondary);
   text-align: left;
 }
-:root .language-menu button.language-option:hover:not(:disabled) {
+:root .selection-menu button.selection-option:hover:not(:disabled) {
   border-color: transparent;
   background: color-mix(in srgb, var(--text-primary) 7%, transparent);
   color: var(--text-primary);
 }
-:root .language-menu button.language-option[aria-checked="true"] {
+:root .selection-menu button.selection-option[aria-checked="true"] {
   border-color: transparent;
   background: color-mix(in srgb, var(--primary-color) 14%, transparent);
   color: var(--primary-active);
@@ -1939,7 +1939,7 @@ body:not(.embedded) #keys-import-labels { display: none; }
   background: var(--app-input-bg-focus, var(--bg-primary));
   box-shadow: inset 0 0 0 1px var(--focus-inset);
 }
-:root[data-cpamp-plugin-host="true"] .time-range-popover, :root[data-cpamp-plugin-host="true"] .language-menu {
+:root[data-cpamp-plugin-host="true"] .time-range-popover, :root[data-cpamp-plugin-host="true"] .selection-menu {
   border-color: color-mix(in srgb, var(--app-input-border-focus, var(--primary-color)) 28%, var(--app-border-strong, var(--border-color)));
   background: var(--app-surface-strong, var(--floating-surface));
   box-shadow: var(--floating-shadow, none);

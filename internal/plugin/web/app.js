@@ -444,8 +444,8 @@ const THEME_MODES = {
   dark: { icon: "moon", label: () => m("ui.theme_dark") }
 };
 function updateThemeButtons() {
-  const mode = THEME_MODES[window.billingTheme?.preference()] || THEME_MODES[""];
-  document.querySelectorAll('[data-page-action="theme"]').forEach((button) => setActionIcon(button, mode.icon, mode.label()));
+  const mode = THEME_MODES[window.billingTheme.preference()];
+  document.querySelectorAll('[data-page-action="theme"]').forEach((button) => button.replaceChildren(actionIcon(mode.icon)));
 }
 
 function updateThemedVisuals() {
@@ -453,12 +453,6 @@ function updateThemedVisuals() {
   if (currentRole && activeTab(currentRole === "account") === "analysis") renderAnalysis(currentRole === "account");
 }
 
-document.querySelectorAll('[data-page-action="theme"]').forEach((button) => {
-  button.onclick = () => {
-    window.billingTheme?.cycle();
-    updateThemeButtons();
-  };
-});
 document.querySelectorAll('[data-page-action="logout"]').forEach((button) => {
   setActionIcon(button, "logout", m("ui.sign_out"));
   button.onclick = () =>
@@ -470,43 +464,32 @@ document.querySelectorAll('[data-page-action="logout"]').forEach((button) => {
       showGate(role, "");
     });
 });
-function addLanguageControl(group) {
-  const menu = el("div", { class: "language-menu", popover: "auto", role: "menu", "aria-label": m("language.select") });
-  const button = el(
-    "button",
-    {
-      type: "button",
-      class: "icon-action",
-      "data-page-action": "language",
-      "aria-haspopup": "menu",
-      "aria-expanded": "false",
-      "aria-label": m("language.select"),
-      onclick: () => {
-        if (menu.matches(":popover-open")) return menu.hidePopover();
-        const current = window.billingI18n.current();
-        menu.replaceChildren(
-          ...window.billingI18n.languages().map((item) =>
-            el("button", {
-              type: "button",
-              class: "language-option",
-              role: "menuitemradio",
-              "aria-checked": String(item.value === current),
-              text: item.label,
-              onclick: () => {
-                menu.hidePopover();
-                button.focus();
-                window.billingI18n.select(item.value);
-              }
-            })
-          )
-        );
-        menu.showPopover();
-        positionAnchoredPopover(menu, button, { align: "end" });
-        menu.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true });
-      }
-    },
-    actionIcon("globe")
-  );
+function attachSelectionMenu(button, label, choices, select) {
+  const menu = el("div", { class: "selection-menu", popover: "auto", role: "menu", "aria-label": label });
+  button.setAttribute("aria-haspopup", "menu");
+  button.setAttribute("aria-expanded", "false");
+  button.onclick = () => {
+    if (menu.matches(":popover-open")) return menu.hidePopover();
+    menu.replaceChildren(
+      ...choices().map((item) =>
+        el("button", {
+          type: "button",
+          class: "selection-option",
+          role: "menuitemradio",
+          "aria-checked": String(item.selected),
+          text: item.label,
+          onclick: () => {
+            menu.hidePopover();
+            button.focus();
+            select(item.value);
+          }
+        })
+      )
+    );
+    menu.showPopover();
+    positionAnchoredPopover(menu, button, { align: "end" });
+    menu.querySelector('[aria-checked="true"]').focus({ preventScroll: true });
+  };
   menu.addEventListener("toggle", (event) => button.setAttribute("aria-expanded", String(event.newState === "open")));
   menu.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -522,9 +505,36 @@ function addLanguageControl(group) {
     const index = items.indexOf(document.activeElement);
     items[(index + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
   });
-  group.prepend(button, menu);
+  button.after(menu);
 }
-document.querySelectorAll(".standalone-actions").forEach(addLanguageControl);
+document.querySelectorAll(".standalone-actions").forEach((group) => {
+  const language = el(
+    "button",
+    { type: "button", class: "icon-action", "data-page-action": "language", "aria-label": m("language.select") },
+    actionIcon("globe")
+  );
+  group.prepend(language);
+  attachSelectionMenu(
+    language,
+    m("language.select"),
+    () => window.billingI18n.languages().map((item) => ({ ...item, selected: item.value === window.billingI18n.current() })),
+    (value) => window.billingI18n.select(value)
+  );
+  attachSelectionMenu(
+    group.querySelector('[data-page-action="theme"]'),
+    m("ui.switch_theme"),
+    () =>
+      Object.entries(THEME_MODES).map(([value, mode]) => ({
+        value,
+        label: mode.label(),
+        selected: value === window.billingTheme.preference()
+      })),
+    (value) => {
+      window.billingTheme.select(value);
+      updateThemeButtons();
+    }
+  );
+});
 
 window.addEventListener("billing-theme-change", updateThemedVisuals);
 window.addEventListener("billing-language-change", () => {
