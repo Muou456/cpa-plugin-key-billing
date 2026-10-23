@@ -1147,20 +1147,24 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
 .credential-table { width: 100%; min-width: 0; table-layout: auto; }
 .credential-table th:not(.credential-quota-column) { width: 1%; }
 .credential-row.disabled > :not(.credential-actions-cell) { opacity: 0.68; }
-.credential-request-success { color: var(--success-badge-text); }
-.credential-request-failed { color: var(--failure-badge-text); }
 .credential-metric { display: grid; gap: 3px; min-width: 0; }
 .credential-metric-label { display: none; color: var(--text-tertiary); font-size: 11px; }
-.credential-metric-detail {
+.credential-metric-value { color: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.credential-usage-cell[data-tip] { cursor: help; }
+.credential-usage-cell > .credential-metric-label { margin-bottom: 6px; }
+.credential-usage { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 16px; min-width: max-content; }
+.credential-usage-item {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-top: 3px;
-  color: var(--text-secondary);
-  font-size: 11px;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
 }
-.credential-metric-value { color: var(--text-primary); font-size: 13px; font-variant-numeric: tabular-nums; }
-.credential-metric-value, .credential-metric-detail-label, .credential-metric-detail-value { white-space: nowrap; }
+.credential-usage-item > .lucide-icon { width: 14px; height: 14px; color: var(--text-secondary); }
+.credential-request-failed { color: var(--failure-badge-text); }
 .credential-head { display: flex; align-items: center; gap: 10px; min-width: 0; width: max-content; max-width: 100%; }
 .credential-identity { min-width: 0; max-width: 280px; flex: 1; }
 .credential-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1293,24 +1297,9 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .auth-quota-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .auth-quota-list > :only-child { grid-column: 1 / -1; }
-.auth-quota-row { display: grid; gap: 5px; min-width: 0; }
+.auth-quota-row { display: grid; align-content: start; gap: 5px; min-width: 0; }
 .auth-quota-row.elapsed .quota-fill { opacity: 0.45; }
 .auth-quota-row.elapsed .auth-quota-value { color: var(--text-tertiary); }
-.ai-balance { display: grid; gap: 10px; min-width: 0; font-variant-numeric: tabular-nums; }
-.ai-balance-row { display: grid; gap: 3px; min-width: 0; }
-.ai-balance-row.depleted .credential-metric-value { color: var(--failure-badge-text); }
-/* Every detail leads with its separator; the clipped margin hides the one starting each line. */
-.ai-balance-details {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin-left: -11px;
-  clip-path: inset(0 0 0 11px);
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-.ai-balance-details > * { padding-left: 10px; border-left: 1px solid var(--border-color); white-space: nowrap; }
 .auth-quota-head { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .auth-quota-label {
   flex: 1;
@@ -1333,6 +1322,21 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
 .auth-quota-metrics { display: inline-flex; gap: 10px; color: var(--text-secondary); }
 .auth-quota-metric { display: inline-flex; align-items: center; gap: 3px; }
 .auth-quota-metric .lucide-icon { display: block; width: 12px; height: 12px; }
+.ai-balance { display: grid; gap: 10px; min-width: 0; font-variant-numeric: tabular-nums; }
+.ai-balance-row { display: grid; gap: 3px; min-width: 0; }
+.ai-balance-row.depleted .credential-metric-value { color: var(--failure-badge-text); }
+/* Every detail leads with its separator; the clipped margin hides the one starting each line. */
+.ai-balance-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-left: -11px;
+  clip-path: inset(0 0 0 11px);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.ai-balance-details > * { padding-left: 10px; border-left: 1px solid var(--border-color); white-space: nowrap; }
 .credential-error {
   padding: 9px 10px;
   border: 1px solid var(--failure-badge-border);
@@ -1342,9 +1346,16 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.auth-plan-expiry {
+  display: flex;
+  align-items: center;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .auth-plan-expiry .inline-icon-button { display: none; }
 @container credential-table (min-width: 901px) {
-  .auth-plan-expiry { display: inline-flex; align-items: center; }
   .auth-plan-expiry-separator, .auth-plan-expiry.end-time .auth-plan-time-left, .auth-plan-expiry:not(.end-time) .auth-plan-end-time {
     display: none;
   }
@@ -1356,13 +1367,13 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-table .credential-row {
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
-    grid-template-areas: "identity identity identity actions" "inflight requests tokens cache" "quota quota quota quota";
+    grid-template-areas: "identity identity identity actions" "inflight usage usage usage" "quota quota quota quota";
     gap: 16px;
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
   }
   .credential-table .credential-row:has(> .credential-plan-cell) {
-    grid-template-areas: "identity identity plan actions" "inflight requests tokens cache" "quota quota quota quota";
+    grid-template-areas: "identity identity plan actions" "inflight usage usage usage" "quota quota quota quota";
   }
   .credential-table .credential-row:last-child { border-bottom: none; }
   .credential-table td { display: block; min-width: 0; padding: 0; border: none; }
@@ -1370,52 +1381,41 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-row:not(:has(> .credential-actions-cell)) > .credential-identity-cell { grid-column: 1 / -1; }
   .credential-plan-cell { grid-area: plan; }
   .credential-inflight-cell { grid-area: inflight; }
-  .credential-requests-cell { grid-area: requests; }
-  .credential-tokens-cell { grid-area: tokens; }
-  .credential-cache-cell { grid-area: cache; }
+  .credential-usage-cell { grid-area: usage; }
+  .credential-usage { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-width: 0; }
   .credential-quota-cell { grid-area: quota; }
   .credential-actions-cell { grid-area: actions; }
   /* Cards drop actions that never apply to the row; the table keeps the column. */
   .credential-actions-cell.unavailable { display: none; }
   .auth-quota-actions { flex-direction: row; }
   .credential-metric-label { display: block; }
-  .credential-metric-detail.inline { display: inline-flex; gap: 0; margin: 0 0 0 4px; font-size: inherit; }
-  .credential-metric-detail.inline .credential-metric-detail-label { display: none; }
-  .credential-metric-detail.inline::before { content: "("; }
-  .credential-metric-detail.inline::after { content: ")"; }
   .auth-quota-list { gap: 10px 16px; }
 }
 @container credential-table (max-width: 560px) {
   .credential-table .credential-row {
     grid-template-columns: minmax(0, 1fr) max-content;
-    grid-template-areas: "identity identity" "inflight inflight" "requests success" "tokens cache" "quota quota" "actions actions";
+    grid-template-areas: "identity identity" "inflight inflight" "usage usage" "quota quota" "actions actions";
     gap: 10px 14px;
     padding: 14px;
   }
   .credential-table .credential-row:has(> .credential-plan-cell) {
-    grid-template-areas: "identity identity" "plan expiry" "inflight inflight" "requests success" "tokens cache" "quota quota" "actions actions";
+    grid-template-areas: "identity identity" "plan expiry" "inflight inflight" "usage usage" "quota quota" "actions actions";
   }
   .credential-table .credential-row:not(:has(> .credential-actions-cell)),
   .credential-table .credential-row:has(> .credential-actions-cell.unavailable) {
-    grid-template-areas: "identity identity" "inflight inflight" "requests success" "tokens cache" "quota quota";
+    grid-template-areas: "identity identity" "inflight inflight" "usage usage" "quota quota";
   }
   .auth-quota-list { grid-template-columns: minmax(0, 1fr); }
   .credential-actions { --button-min-height: 30px; }
-  .credential-table :is(.credential-plan-cell, .credential-requests-cell) { display: contents; }
+  .credential-usage-item { gap: 4px; font-size: 12px; }
+  .credential-usage-item > .lucide-icon { width: 12px; height: 12px; }
+  .credential-table .credential-plan-cell { display: contents; }
   .credential-plan-cell .credential-metric { grid-area: plan; }
-  .credential-plan-cell .credential-metric-detail { grid-area: expiry; }
-  .credential-requests-cell .credential-metric { grid-area: requests; }
-  .credential-requests-cell .credential-metric-detail { grid-area: success; }
-  .credential-requests-cell .credential-metric-value { white-space: normal; }
-  :is(.credential-plan-cell, .credential-requests-cell) .credential-metric-detail {
-    align-self: start;
-    gap: 6px;
-    margin: 0;
-    font-size: 13px;
-  }
-  .credential-metric-detail-label { color: var(--text-tertiary); font-size: 11px; }
-  .credential-metric-detail-value { color: var(--text-primary); }
+  .auth-plan-expiry { grid-area: expiry; align-self: start; margin: 0; font-size: 13px; color: var(--text-primary); }
   .credential-table .credential-metric { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+}
+@container credential-table (max-width: 320px) {
+  .credential-usage-item { flex-direction: column; align-items: flex-start; }
 }
 dialog, .time-range-popover { max-height: 80dvh; }
 dialog {

@@ -703,6 +703,8 @@
   "quota.token_limit": "Token limit",
   "quota.request_limit": "Request limit",
   "ui.auth_total_tokens": "Total tokens",
+  "ui.historical_usage": "Historical usage",
+  "ui.successful_failed_requests": "Successful / failed requests",
   "ui.cache_rate": "Cache rate",
   "ui.quota": "Quota",
   "ui.quota_reset_elapsed": "Reset time reached",

@@ -51,7 +51,9 @@ function renderAuthFilePlan(file, quota) {
         actionIcon("arrow-left-right")
       )
     );
-  return credentialMetric("plan", m("ui.plan"), quota?.plan?.trim() || "—", expiry && { value: expiry });
+  const cell = credentialMetric("plan", m("ui.plan"), quota?.plan?.trim() || "—");
+  if (expiry) cell.append(expiry);
+  return cell;
 }
 
 function toggleAuthPlanTime() {
@@ -787,7 +789,7 @@ function retryAuthDrawerHistory() {
 }
 
 function renderAuthDrawerUsage(usage) {
-  const { count, success, total } = credentialUsageSummary(usage);
+  const { requests, successRate, totalTokens } = credentialUsageSummary(usage);
   const stat = (label, value, tooltip) =>
     el(
       "div",
@@ -798,9 +800,9 @@ function renderAuthDrawerUsage(usage) {
   return el(
     "div",
     { class: "drawer-stats" },
-    stat(m("ui.requests"), tokens(count, 2), count >= 1000 ? int(count) : null),
-    stat(m("ui.success_rate"), success),
-    stat(m("ui.auth_total_tokens"), tokens(total), total >= 1000 ? exactTokens(total) : null),
+    stat(m("ui.requests"), tokens(requests, 2), requests >= 1000 ? int(requests) : null),
+    stat(m("ui.success_rate"), successRate),
+    stat(m("ui.auth_total_tokens"), tokens(totalTokens), totalTokens >= 1000 ? exactTokens(totalTokens) : null),
     stat(m("ui.cost"), usd(usage.cost_usd, 2))
   );
 }

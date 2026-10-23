@@ -141,31 +141,21 @@ function providerIcon(brand) {
   return el("span", { class: "provider-icon", "data-provider": brand, role: "img", "aria-label": PROVIDER_LABELS[brand] }, iconSVG(markup));
 }
 
-function credentialUsageSummary(usage) {
-  const count = usage.requests;
-  const failed = usage.failed;
+function credentialUsageSummary({ requests, failed, input_tokens: inputTokens, output_tokens: outputTokens }) {
+  const succeeded = requests - failed;
+  const digits = failed === 0 || succeeded === 0 ? 0 : 2;
   return {
-    count,
+    requests,
+    succeeded,
     failed,
-    success: count ? (((count - failed) / count) * 100).toFixed(2) + "%" : "—",
-    total: usage.input_tokens + usage.output_tokens,
-    cache: usage.input_tokens ? ((usage.cache_read_tokens / usage.input_tokens) * 100).toFixed(2) + "%" : "—"
+    successRate: requests ? ((succeeded / requests) * 100).toFixed(digits) + "%" : "—",
+    totalTokens: inputTokens + outputTokens
   };
 }
 
-function credentialMetricHeaders() {
-  return ["ui.in_flight_requests", "ui.requests", "ui.auth_total_tokens", "ui.cache_rate"].map((key) => m(key));
-}
+function credentialMetricHeaders() { return ["ui.in_flight_requests", "ui.historical_usage"].map((key) => m(key)); }
 
-function credentialMetric(name, label, value, secondary) {
-  const detail =
-    secondary &&
-    el(
-      "span",
-      { class: "credential-metric-detail" + (secondary.inline ? " inline" : "") },
-      secondary.label && el("span", { class: "credential-metric-detail-label", text: secondary.label }),
-      el("span", { class: "credential-metric-detail-value" }, secondary.value)
-    );
+function credentialMetric(name, label, value) {
   return el(
     "td",
     { class: "credential-" + name + "-cell" },
@@ -173,42 +163,43 @@ function credentialMetric(name, label, value, secondary) {
       "div",
       { class: "credential-metric" },
       el("span", { class: "credential-metric-label", text: label }),
-      el("span", { class: "credential-metric-value" }, value, secondary?.inline && detail)
-    ),
-    !secondary?.inline && detail
+      el("span", { class: "credential-metric-value" }, value)
+    )
   );
 }
 
 function renderCredentialMetrics({ usage, in_flight: inFlight }, breakdown) {
-  return [credentialMetric("inflight", m("ui.in_flight_requests"), int(inFlight)), ...renderCredentialUsage(usage, breakdown)];
+  return [credentialMetric("inflight", m("ui.in_flight_requests"), int(inFlight)), renderCredentialUsage(usage, breakdown)];
 }
 
 function renderCredentialUsage(usage, breakdown) {
-  if (!usage) {
-    return [
-      credentialMetric("requests", m("ui.requests"), "—"),
-      credentialMetric("tokens", m("ui.auth_total_tokens"), "—"),
-      credentialMetric("cache", m("ui.cache_rate"), "—")
-    ];
+  const summary = usage && credentialUsageSummary(usage);
+  const requests = [summary ? tokens(summary.succeeded, 2) : "—"];
+  if (summary?.failed > 0) {
+    requests.push(DISPLAY_SLASH, el("span", { class: "credential-request-failed", text: tokens(summary.failed, 2) }));
   }
-  const { count, failed, success, total, cache } = credentialUsageSummary(usage);
-  const totalTokens =
-    breakdown && count > 0 ? el("span", { class: "breakdown-value", ...hoverTooltipProps(breakdown) }, tokens(total)) : tokens(total);
-  const requests = [
-    tokens(count, 2),
-    " (",
-    el("span", { class: "credential-request-success", text: tokens(count - failed, 2) }),
-    DISPLAY_SLASH,
-    el("span", { class: "credential-request-failed", text: tokens(failed, 2) }),
-    ")"
+  const metrics = [
+    ["arrow-left-right", m("ui.successful_failed_requests"), requests],
+    ["square-text", m("ui.auth_total_tokens"), summary ? tokens(summary.totalTokens) : "—"],
+    ["circle-check", m("ui.success_rate"), summary ? summary.successRate : "—"],
+    ["circle-dollar-sign", m("ui.cost"), usage ? usd(usage.cost_usd, 2) : "—"]
   ];
-  return [
-    credentialMetric("requests", m("ui.requests"), requests, { label: m("ui.success_rate"), value: success }),
-    credentialMetric("tokens", m("ui.auth_total_tokens"), totalTokens, {
-      label: m("ui.cost"),
-      value: usd(usage.cost_usd, 2),
-      inline: true
-    }),
-    credentialMetric("cache", m("ui.cache_rate"), cache)
-  ];
+  return el(
+    "td",
+    { class: "credential-usage-cell", ...hoverTooltipProps(breakdown, breakdown && summary?.requests > 0) },
+    el("span", { class: "credential-metric-label", text: m("ui.historical_usage") }),
+    el(
+      "div",
+      { class: "credential-usage" },
+      metrics.map(([icon, label, value]) =>
+        el(
+          "span",
+          { class: "credential-usage-item" },
+          actionIcon(icon),
+          el("span", { class: "visually-hidden" }, label, ": "),
+          el("span", {}, value)
+        )
+      )
+    )
+  );
 }

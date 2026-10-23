@@ -703,6 +703,8 @@
   "quota.token_limit": "Token 限额",
   "quota.request_limit": "请求限额（次）",
   "ui.auth_total_tokens": "总 Token",
+  "ui.historical_usage": "历史用量",
+  "ui.successful_failed_requests": "成功请求数/失败请求数",
   "ui.cache_rate": "缓存率",
   "ui.quota": "额度",
   "ui.quota_reset_elapsed": "已到重置时间",
