@@ -232,6 +232,8 @@ function restoreRolePreferences(role) {
   restoreChoice(role, prefix + "request-event-status", "");
   restoreChoice(role, prefix + "auth-enabled-only", true);
   restoreChoice(role, prefix + "auth-provider", "");
+  restoreChoice(role, prefix + "ai-provider-enabled-only", true);
+  restoreChoice(role, prefix + "ai-provider-type", "");
   restoreChoice(role, prefix + "auto-refresh", "0");
   setPrivacyMask(role, viewPreference(role, prefix + "privacy-mask", false));
   if (!account) {
@@ -239,8 +241,6 @@ function restoreRolePreferences(role) {
     if ($("analysis-key").value === UNASSIGNED_KEY) $("analysis-key").selectedOptions[0].textContent = m("ui.unassigned");
     restoreChoice(role, "keys-include-deleted", false);
     restoreChoice(role, "auth-quota-estimate", false);
-    restoreChoice(role, "ai-provider-enabled-only", true);
-    restoreChoice(role, "ai-provider-type", "");
     restoreChoice(role, "plugin-log-level", "all");
   }
   sharedTimeRanges[role] = storedTimeRange(role);
@@ -265,9 +265,9 @@ function resetRoleControls(role) {
   closeSharedTimePopover(account);
   setPrivacyMask(role, false);
   $(prefix + "auth-search").value = "";
+  $(prefix + "ai-provider-search").value = "";
   if (!account) {
     $("key-filter").value = "";
-    $("ai-provider-search").value = "";
     $("keys-include-deleted").checked = false;
     $("price-filter").value = "";
     $("plugin-log-filter").value = "";
@@ -295,11 +295,9 @@ function resetRoleData(role) {
   analysisQueries[role].clear();
   speedQueries[role].clear();
   authFilesQueries[role].clear();
+  aiProvidersQueries[role].clear();
   modelUsages[role].clear();
-  if (!account) {
-    aiProvidersQuery.clear();
-    eventKeysQuery.clear();
-  }
+  if (!account) { eventKeysQuery.clear(); }
   for (const list of Object.values(pagedLists[role])) list.reset();
   resetRoleControls(role);
 }

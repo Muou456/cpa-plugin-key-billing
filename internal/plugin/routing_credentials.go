@@ -317,49 +317,6 @@ func (a *App) observeCredentialUsage(authIndex, authType, account string) {
 	a.credentials[ref] = credential
 }
 
-func (a *App) syncConfiguredCredentials(req ManagementRequest) ManagementResponse {
-	var body struct {
-		Credentials []struct {
-			Ref         string `json:"ref"`
-			Provider    string `json:"provider"`
-			DisplayName string `json:"display_name"`
-			Disabled    bool   `json:"disabled"`
-		} `json:"credentials"`
-	}
-	if errDecode := decodeStrict(req.Body, &body); errDecode != nil {
-		return errorResponse(errDecode)
-	}
-	if len(body.Credentials) > 4096 {
-		return JSONError(http.StatusBadRequest, "invalid", "Too many configured credentials")
-	}
-
-	next := make(map[string]billing.ConfigCredential, len(body.Credentials))
-	for _, item := range body.Credentials {
-		ref := strings.ToLower(strings.TrimSpace(item.Ref))
-		provider := strings.ToLower(strings.TrimSpace(item.Provider))
-		if !billing.ValidCredentialFingerprint(ref) || provider == "" || len(provider) > 160 || cleanText(provider) != provider {
-			return JSONError(http.StatusBadRequest, "invalid", "Invalid configured credential identifier")
-		}
-		next[ref] = billing.ConfigCredential{
-			Provider: provider, KeyPreview: billing.PreviewKey(cleanText(item.DisplayName)), Disabled: item.Disabled,
-		}
-	}
-
-	if err := func() error {
-		a.routingMu.Lock()
-		defer a.routingMu.Unlock()
-		previous := a.store.ConfigCredentials()
-		if err := a.store.SyncConfigCredentials(next); err != nil {
-			return err
-		}
-		a.replaceSyncedCredentials(previous, next)
-		return nil
-	}(); err != nil {
-		return errorResponse(err)
-	}
-	return JSONResponse(http.StatusOK, map[string]any{"credentials": a.credentialInventory()})
-}
-
 // Caller holds routingMu across persistence and inventory publication.
 func (a *App) replaceSyncedCredentials(previous, next map[string]billing.ConfigCredential) {
 	for id := range a.credentialIdentities {

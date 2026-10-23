@@ -134,10 +134,7 @@ const authFilesQueries = Object.fromEntries(
     })
   ])
 );
-const aiProvidersQuery = createQuery(m("ui.ai_providers"), (providers) => {
-  updateAIProviders(providers);
-  return providers;
-});
+const aiProvidersQueries = Object.fromEntries(["admin", "account"].map((role) => [role, createQuery(m("ui.ai_providers"))]));
 const eventKeysQuery = createQuery(m("ui.event_api_key_filter"));
 const UNASSIGNED_KEY = "__unassigned__";
 
@@ -415,9 +412,7 @@ function queueAdminData(group, operation) {
 }
 
 async function readAdminConfiguration(read) {
-  // Keep plaintext configuration out of the resource cache.
-  const config = api("GET", "/v0/management/config", null);
-  const configuredKeys = config.then(parseConfiguredAPIKeys);
+  const configuredKeys = fetchConfiguredAPIKeys();
   const errors = [];
   const sync = async (label, operation) => {
     try { await operation(); } catch (error) {
@@ -427,9 +422,7 @@ async function readAdminConfiguration(read) {
   };
   const synced = settleLoads([
     sync("API Key", async () => plugin("POST", "/keys/sync", { keys: await configuredKeys, allow_empty: true }, { command: true })),
-    sync(m("ui.credentials"), async () =>
-      plugin("POST", "/credentials/sync", { credentials: await parseConfiguredCredentials(await config) }, { command: true })
-    )
+    sync(m("ui.credentials"), syncConfiguredProviders)
   ]);
   await settleLoads([
     read("plans", () => fetchAdminCollection("plans")),
@@ -519,7 +512,7 @@ async function fetchModelPrices(models, account) {
 
 async function fetchConfiguredAPIKeys() {
   const result = await api("GET", "/v0/management/api-keys", null);
-  return parseConfiguredAPIKeys(result);
+  return result["api-keys"] || [];
 }
 
 // The plugin filters /v1/models by the key's routing rules; management lists every model.
@@ -618,7 +611,7 @@ function createPages(role) {
     analysis: analysisQueries[role],
     speed: speedQueries[role],
     authFiles: authFilesQueries[role],
-    aiProviders: aiProvidersQuery,
+    aiProviders: aiProvidersQueries[role],
     eventKeys: eventKeysQuery,
     keyDirectory,
     ...Object.fromEntries(Object.entries(pagedLists[role]).map(([name, list]) => [name, list.query]))
@@ -649,6 +642,13 @@ function createPages(role) {
       list: pagedLists[role].errors,
       sections: [keyedSection(["errors"], () => renderErrors(account))]
     },
+    "ai-providers": {
+      timeRange: true,
+      autoRefresh: true,
+      queries: [data.aiProviders],
+      load: (reload) => readAIProviders(account, reload),
+      sections: [section(["aiProviders"], () => renderAIProviders(account))]
+    },
     "auth-files": {
       timeRange: true,
       autoRefresh: true,
@@ -669,13 +669,6 @@ function createPages(role) {
     const keyFilter = keyedSection(["eventKeys"], renderEventKeys);
     for (const tab of ["analysis", "request-events", "errors"]) result[tab].sections.unshift(keyFilter);
     result.keys = { editors: ["route"], sections: [keyedSection(["keys", "plans", "routes", "credentials"], renderKeys)] };
-    result["ai-providers"] = {
-      timeRange: true,
-      autoRefresh: true,
-      queries: [data.aiProviders],
-      load: (reload) => readAIProviders(reload),
-      sections: [section(["aiProviders"], renderAIProviders)]
-    };
     result.settings = {
       editors: ["plan", "route"],
       list: pagedLists[role].logs,

@@ -129,7 +129,7 @@ func TestAfterAuthEnforcesCredentialRoutesAndRecordsResults(t *testing.T) {
 				if tc.candidate != nil {
 					provider = "claude"
 				}
-				app.replaceSyncedCredentials(nil, map[string]billing.ConfigCredential{ref(tc.id): {Provider: provider}})
+				app.replaceSyncedCredentials(nil, map[string]billing.ConfigCredential{ref(tc.id): {ConfigCredentialDetails: billing.ConfigCredentialDetails{Provider: provider}}})
 				app.routingMu.Unlock()
 			}
 			calls := 0

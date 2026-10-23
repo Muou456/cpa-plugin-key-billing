@@ -1367,6 +1367,7 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-table .credential-row:last-child { border-bottom: none; }
   .credential-table td { display: block; min-width: 0; padding: 0; border: none; }
   .credential-identity-cell { grid-area: identity; }
+  .credential-row:not(:has(> .credential-actions-cell)) > .credential-identity-cell { grid-column: 1 / -1; }
   .credential-plan-cell { grid-area: plan; }
   .credential-requests-cell { grid-area: requests; }
   .credential-tokens-cell { grid-area: tokens; }
@@ -1393,6 +1394,7 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-table .credential-row:has(> .credential-plan-cell) {
     grid-template-areas: "identity identity" "plan expiry" "requests success" "tokens cache" "quota quota" "actions actions";
   }
+  .credential-table .credential-row:not(:has(> .credential-actions-cell)),
   .credential-table .credential-row:has(> .credential-actions-cell.unavailable) {
     grid-template-areas: "identity identity" "requests success" "tokens cache" "quota quota";
   }

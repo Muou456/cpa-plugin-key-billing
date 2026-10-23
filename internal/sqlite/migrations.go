@@ -44,11 +44,29 @@ func migrateSchema(tx *sql.Tx, version int, storedHeaders StoredQuotaHeaders) er
 	if version <= 19 {
 		steps = append(steps, func(tx *sql.Tx) error { return migrateQuotaReports(tx, storedHeaders) })
 	}
-	steps = append(steps, migrateClientHeaders)
+	if version <= 20 {
+		steps = append(steps, migrateClientHeaders)
+	}
+	steps = append(steps, migrateConfiguredProviders)
 	for _, step := range steps {
 		if err := step(tx); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func migrateConfiguredProviders(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		ALTER TABLE config_credentials ADD COLUMN auth_index TEXT NOT NULL DEFAULT '';
+		ALTER TABLE config_credentials ADD COLUMN type TEXT NOT NULL DEFAULT '';
+		ALTER TABLE config_credentials ADD COLUMN name TEXT NOT NULL DEFAULT '';
+		ALTER TABLE config_credentials ADD COLUMN base_url TEXT NOT NULL DEFAULT '';
+		ALTER TABLE config_credentials ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE config_credentials ADD COLUMN weight INTEGER NOT NULL DEFAULT 1;
+		ALTER TABLE config_credentials ADD COLUMN balance_json TEXT NOT NULL DEFAULT 'null';`)
+	if err != nil {
+		return fmt.Errorf("Add configured provider snapshots: %w", err)
 	}
 	return nil
 }

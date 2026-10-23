@@ -1,18 +1,3 @@
-const CONFIGURED_CREDENTIAL_FIELDS = [
-  ["gemini-api-key", "gemini", "gemini:apikey", true],
-  ["interactions-api-key", "gemini-interactions", "gemini-interactions:apikey", true],
-  ["claude-api-key", "claude", "claude:apikey", true],
-  ["codex-api-key", "codex", "codex:apikey", true],
-  ["xai-api-key", "xai", "xai:apikey", true],
-  ["meta-api-key", "meta", "meta:apikey", true],
-  ["vertex-api-key", "vertex", "vertex:apikey", false]
-];
-
-function sortedConfiguredHeaders(headers) {
-  if (!headers) return "";
-  return Object.keys(headers).sort().map((key) => key + "\0" + headers[key] + "\0").join("");
-}
-
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value);
   if (window.crypto?.subtle) {
@@ -69,81 +54,6 @@ async function sha256Hex(value) {
   return Array.from(hash, (word) => word.toString(16).padStart(8, "0")).join("");
 }
 
-async function configuredCredentialRef(kind, parts, counters) {
-  // These hashes must stay byte-identical to CPA's StableIDGenerator and
-  // the plugin's CredentialFingerprint so exact bindings match candidates.
-  const digest = await sha256Hex(kind + parts.map((part) => "\0" + String(part || "").trim()).join(""));
-  const base = kind + ":" + digest.slice(0, 12);
-  const collision = counters.get(base) || 0;
-  counters.set(base, collision + 1);
-  const id = collision ? base + "-" + collision : base;
-  return "sha256:" + (await sha256Hex("cpa-key-billing:credential:v1\0" + id));
-}
-
-function parseConfiguredAPIKeys(config) {
-  // CPA returns an empty object when configuration is unavailable; never sync it as an empty key list.
-  if (!Object.hasOwn(config, "api-keys")) throw new UIError(m("ui.invalid_cpa_api_key_list"));
-  return config["api-keys"] || [];
-}
-
-async function parseConfiguredCredentials(config) {
-  const generation = sessionGeneration;
-  const counters = new Map();
-  const credentials = [];
-
-  for (const [field, provider, kind, usesHeaders] of CONFIGURED_CREDENTIAL_FIELDS) {
-    for (const entry of config[field] || []) {
-      const apiKey = (entry["api-key"] || "").trim();
-      const baseURL = (entry["base-url"] || "").trim();
-      if (!apiKey && !baseURL) continue;
-      const parts = [apiKey, baseURL, entry["proxy-url"]];
-      if (usesHeaders) parts.push(entry.prefix, sortedConfiguredHeaders(entry.headers));
-      credentials.push({
-        ref: await configuredCredentialRef(kind, parts, counters),
-        provider,
-        display_name: previewCredential(apiKey),
-        disabled: (entry["excluded-models"] || []).some((model) => model.trim() === "*")
-      });
-    }
-  }
-
-  for (const entry of config["openai-compatibility"] || []) {
-    // CPA does not create runtime credentials or consume IDs for disabled providers.
-    if (entry.disabled === true) continue;
-    const providerName = (entry.name || "").trim().toLowerCase() || "openai-compatibility";
-    const provider =
-      providerName === "openai-compatibility" || providerName.startsWith("openai-compatible-")
-        ? providerName
-        : "openai-compatible-" + providerName;
-    const apiKeys = entry["api-key-entries"] || [];
-    if (!apiKeys.length) {
-      credentials.push({
-        ref: await configuredCredentialRef("openai-compatibility:" + providerName, [entry["base-url"]], counters),
-        provider,
-        display_name: "",
-        disabled: false
-      });
-      continue;
-    }
-    for (const apiKeyEntry of apiKeys) {
-      const apiKey = (apiKeyEntry["api-key"] || "").trim();
-      credentials.push({
-        ref: await configuredCredentialRef(
-          "openai-compatibility:" + providerName,
-          [apiKey, entry["base-url"], apiKeyEntry["proxy-url"]],
-          counters
-        ),
-        provider,
-        display_name: previewCredential(apiKey),
-        disabled: false
-      });
-    }
-  }
-
-  if (generation !== sessionGeneration) throw new StaleRequestError();
-  return credentials;
-}
-
 function credentialName(item) { return window.billingI18n.serverMessage(item.display_name_message, item.display_name); }
 
 function credentialLabel(item) { return m("ui.join", { v0: item.provider, v1: DISPLAY_SEPARATOR, v2: credentialName(item) }); }
@@ -172,7 +82,6 @@ function sameCredentialProvider(a, b) { return a.source === b.source && a.provid
 
 function clearCredentialScope(account) {
   const role = account ? "account" : "admin";
-  if (!account) forgetAIBalances();
   const key = authQuotaStorageKey(role);
   if (key) { try { sessionStorage.removeItem(key); } catch (_) {} }
   credentialScope[role] = "";
@@ -183,7 +92,7 @@ async function activateCredentialScope(account, credential) {
   const generation = sessionGeneration;
   const role = account ? "account" : "admin";
   resetAuthQuotaMemory(account);
-  if (!account) resetAIBalanceMemory();
+  if (!account) resetAIBalanceBatch();
   credentialScope[role] = "";
   try {
     const scope = (await sha256Hex(role + "|" + credential)).slice(0, 32);
@@ -193,7 +102,6 @@ async function activateCredentialScope(account, credential) {
     if (generation !== sessionGeneration) throw new StaleRequestError();
     return;
   }
-  if (!account) restoreAIBalances();
   restoreAuthQuotaCache(account);
 }
 

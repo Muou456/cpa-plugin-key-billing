@@ -29,7 +29,7 @@ function readPanelKey() {
 const embedded = window.parent !== window;
 document.body.classList.toggle("embedded", embedded);
 const ADMIN_TAB_IDS = ["keys", "analysis", "request-events", "errors", "auth-files", "ai-providers", "settings"];
-const ACCOUNT_TAB_IDS = ["subscription", "analysis", "request-events", "errors", "auth-files"];
+const ACCOUNT_TAB_IDS = ["subscription", "analysis", "request-events", "errors", "auth-files", "ai-providers"];
 const PAGE_ROUTE_KEY = "cpa-key-billing.route.v1." + (embedded ? "embedded" : "standalone");
 
 function parsePageRoute(value) {
@@ -71,7 +71,6 @@ function emptyAdminUIState() {
     ...emptyAuthQuotaState(),
     keySubmissions: new Set(),
     authStatusSubmissions: new Map(),
-    aiBalances: new Map(),
     aiBalanceLoading: new Set(),
     aiBalanceErrors: new Map()
   };

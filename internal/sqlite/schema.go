@@ -86,10 +86,17 @@ CREATE TABLE routes (
 );
 
 CREATE TABLE config_credentials (
-	ref         TEXT PRIMARY KEY,
-	provider    TEXT NOT NULL,
-	key_preview TEXT NOT NULL DEFAULT '',
-	disabled    INTEGER NOT NULL DEFAULT 0
+	ref          TEXT PRIMARY KEY,
+	provider     TEXT NOT NULL,
+	key_preview  TEXT NOT NULL DEFAULT '',
+	disabled     INTEGER NOT NULL DEFAULT 0,
+	auth_index   TEXT NOT NULL DEFAULT '',
+	type         TEXT NOT NULL DEFAULT '',
+	name         TEXT NOT NULL DEFAULT '',
+	base_url     TEXT NOT NULL DEFAULT '',
+	priority     INTEGER NOT NULL DEFAULT 0,
+	weight       INTEGER NOT NULL DEFAULT 1,
+	balance_json TEXT NOT NULL DEFAULT 'null'
 );
 
 CREATE TABLE plans (

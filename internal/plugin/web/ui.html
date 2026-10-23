@@ -356,6 +356,7 @@
                   <button type="button" data-account-tab="request-events" data-i18n="ui.request_events">Request events</button>
                   <button type="button" data-account-tab="errors" data-i18n="ui.error_events">Error events</button>
                   <button type="button" data-account-tab="auth-files" data-i18n="ui.auth_files">Auth Files</button>
+                  <button type="button" data-account-tab="ai-providers" data-i18n="ui.ai_providers">AI Providers</button>
                 </div>
                 <span class="native-select page-tab-select">
                   <select id="account-page-tab-select" aria-label="Select view" data-i18n-aria-label="ui.select_view"></select>
@@ -487,6 +488,29 @@
               <p class="muted small table-footnote" data-i18n="ui.auth_file_usage_scope">Requests, tokens and costs cover only the current API key, not the auth file’s total usage.</p>
             </div>
           </section>
+          <section id="account-tab-ai-providers" class="hidden">
+            <div class="card">
+              <div class="row spread section-toolbar">
+                <h2 data-i18n="ui.ai_providers">AI Providers</h2>
+                <div class="row section-actions credential-filter-bar">
+                  <div class="credential-filter-switches">
+                    <label class="toggle-filter">
+                      <input id="account-ai-provider-enabled-only" type="checkbox" role="switch" checked />
+                      <span data-i18n="ui.enabled_only">Enabled only</span>
+                    </label>
+                  </div>
+                  <span class="native-select">
+                    <select id="account-ai-provider-type" aria-label="Filter by provider type" data-i18n-aria-label="ui.filter_by_ai_provider_type">
+                      <option value="" data-i18n="ui.all_types">All types</option>
+                    </select>
+                  </span>
+                  <input id="account-ai-provider-search" type="search" placeholder="Search AI providers" autocomplete="off"  data-i18n-placeholder="ui.search_ai_providers"/>
+                </div>
+              </div>
+              <div id="account-ai-providers-body" class="credential-list"></div>
+              <p class="muted small table-footnote" data-i18n="ui.ai_provider_usage_scope">Usage covers only the current API key. Balances reflect the last admin query.</p>
+            </div>
+          </section>
         </section>
       </main>
     </div>
@@ -612,6 +636,7 @@
       /*error-events.js*/
       /*logs.js*/
       /*auth-files.js*/
+      /*ai-balances.js*/
       /*ai-providers.js*/
       /*account.js*/
       /*app.js*/

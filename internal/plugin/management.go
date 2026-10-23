@@ -47,7 +47,8 @@ const (
 	routeAuthQuotaReset         = "/auth-files/quota/reset"
 	routeAuthFileHistory        = "/auth-files/history"
 	routeUsageModels            = "/usage/models"
-	routeAIProviderUsage        = "/ai-providers/usage"
+	routeAIProviders            = "/ai-providers"
+	routeAIProviderBalance      = "/ai-providers/balance"
 )
 
 type managementEndpoint struct {
@@ -108,7 +109,8 @@ var managementEndpoints = []managementEndpoint{
 	{http.MethodGet, routeUsageModels, "View usage by model", func(a *App, req ManagementRequest) ManagementResponse {
 		return a.usageModels(req, viewAccess{})
 	}},
-	{http.MethodGet, routeAIProviderUsage, "View configured AI provider credential usage", (*App).aiProviderUsage},
+	{http.MethodGet, routeAIProviders, "View configured AI providers", func(a *App, req ManagementRequest) ManagementResponse { return a.aiProviders(req, viewAccess{}) }},
+	{http.MethodPost, routeAIProviderBalance, "Sync AI provider balance", (*App).syncAIProviderBalance},
 }
 
 type resourceEndpoint struct {
@@ -136,6 +138,7 @@ var resourceEndpoints = []resourceEndpoint{
 	{routeAuthQuotaReset, (*App).authQuotaReset},
 	{routeAuthFileHistory, (*App).authFileHistory},
 	{routeUsageModels, (*App).usageModels},
+	{routeAIProviders, (*App).aiProviders},
 }
 
 func managementRegistration() ManagementRegistrationResponse {

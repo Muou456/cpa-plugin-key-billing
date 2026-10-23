@@ -3,7 +3,6 @@ package billing
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -130,23 +129,6 @@ func CredentialFingerprint(rawID string) string {
 	_, _ = h.Write([]byte("cpa-key-billing:credential:v1\x00"))
 	_, _ = h.Write([]byte(rawID))
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
-}
-
-func (s *Store) ConfigCredentials() map[string]ConfigCredential {
-	var credentials map[string]ConfigCredential
-	s.read(func(state *State) { credentials = maps.Clone(state.ConfigCredentials) })
-	return credentials
-}
-
-func (s *Store) SyncConfigCredentials(credentials map[string]ConfigCredential) error {
-	_, err := editConfiguration(s, func(state *State) (struct{}, Changes, error) {
-		if maps.Equal(state.ConfigCredentials, credentials) {
-			return struct{}{}, Changes{}, nil
-		}
-		state.ConfigCredentials = maps.Clone(credentials)
-		return struct{}{}, Changes{ConfigCredentials: true}, nil
-	})
-	return err
 }
 
 func ValidCredentialFingerprint(value string) bool {

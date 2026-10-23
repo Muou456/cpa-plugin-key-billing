@@ -284,8 +284,14 @@ func (a *App) usageModels(req ManagementRequest, access viewAccess) ManagementRe
 	if err := timeRangeParams(req.Query, &query.From, &query.To); err != nil {
 		return viewErrorResponse(access, err)
 	}
-	if req.Query.Has("auth_index") {
-		// An API key sees only the auth files its routing allows.
+	if req.Query.Has("credential_ref") {
+		ref := req.Query.Get("credential_ref")
+		credential, ok := a.visibleConfigCredentials(access)[ref]
+		if !ok || credential.AuthIndex == "" {
+			return viewJSONError(access, http.StatusNotFound, "not_found", "Configured credential does not exist")
+		}
+		query.AuthIndex = credential.AuthIndex
+	} else if req.Query.Has("auth_index") {
 		if access.APIKey {
 			if selected, failure := a.resolveAuthFile(req, access); selected == nil {
 				return failure

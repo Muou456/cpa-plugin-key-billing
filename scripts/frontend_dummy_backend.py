@@ -342,6 +342,7 @@ CREDENTIALS = [
     {"ref": UNAVAILABLE_CREDENTIAL_REF, "source": "auth-files", "provider": "kimi", "display_name": "kimi-research", "status": "error", "disabled": False, "unavailable": True},
 ]
 SYNCED_CREDENTIAL_REFS = set()
+CONFIG_CREDENTIALS = {}
 
 ROUTES = [
     {"id": "coding", "name": "代码开发", "rule": {"models": ["gpt-5.6-sol", "gpt-5.5", "codex/deepseek-v4-flash-vision-exp"], "credential_ids": [], "credential_providers": [{"source": "auth-files", "provider": "codex"}]}},
@@ -847,7 +848,11 @@ USAGE_DIMENSIONS = {"api_keys": ("scope", ""), "models": ("billing_model", "未�
 
 
 def usage_models(query, scope=""):
-    """Breaks down a credential's usage, one of its synthetic quota periods, or usage distribution rows by model."""
+    """Break down credential, quota-period, or distribution usage by model."""
+    if "credential_ref" in query:
+        credential = CONFIG_CREDENTIALS.get(query["credential_ref"][0], {})
+        query = {**query, "auth_index": [credential.get("auth_index", "")]}
+
     auth_index = query.get("auth_index", [None])[0]
     if auth_index is not None:
         bounds = (query.get("from", [""])[0], query.get("to", [""])[0])
@@ -1259,6 +1264,19 @@ def account_auth_files(index):
             if (not refs and not providers or AUTH_FILE_CREDENTIAL_REFS.get(item["auth_index"]) in refs or ("auth-files", item["category"]) in providers)
             and AUTH_FILE_CREDENTIAL_REFS.get(item["auth_index"]) not in denied_refs
             and ("auth-files", item["category"]) not in denied_providers]
+
+
+def configured_provider_views(query, account_index=None):
+    entries = filter_event_time(REQUEST_EVENTS, query)
+    credentials = list(CONFIG_CREDENTIALS.values())
+    if account_index is not None:
+        _, refs, providers, _, denied_refs, denied_providers = account_routing(account_index)
+        credentials = [item for item in credentials
+                       if (not refs and not providers or item["ref"] in refs or ("ai-providers", item["provider"]) in providers)
+                       and item["ref"] not in denied_refs and ("ai-providers", item["provider"]) not in denied_providers]
+        entries = [row for row in entries if row["scope"] == LIVE_KEYS[account_index]["scope"]]
+    return [{**item, "usage": credential_usage([row for row in entries if row["auth_index"] == item["auth_index"]])
+             if item["auth_index"] else None} for item in credentials]
 
 
 def refresh_route_counts():
@@ -1768,14 +1786,8 @@ def payload_for(path, query):
         return auth_file_history(query)
     if path == f"{API_BASE}/usage/models":
         return usage_models(query)
-    if path == f"{API_BASE}/ai-providers/usage":
-        entries = filter_event_time(REQUEST_EVENTS, query)
-        usage = {}
-        for index in set(query.get("auth_index", [])):
-            rows = [entry for entry in entries if entry["auth_index"] == index]
-            if rows:
-                usage[index] = credential_usage(rows)
-        return {"usage": usage}
+    if path == f"{API_BASE}/ai-providers":
+        return {"providers": configured_provider_views(query)}
     if path.startswith("/v0/management/") and path.removeprefix("/v0/management/") in AI_PROVIDER_LISTS:
         field = path.removeprefix("/v0/management/")
         return {field: AI_PROVIDER_LISTS[field]}
@@ -1896,6 +1908,7 @@ class Handler(BaseHTTPRequestHandler):
             f"{RESOURCE_BASE}/auth-files/quota/reset",
             f"{RESOURCE_BASE}/auth-files/history",
             f"{RESOURCE_BASE}/usage/models",
+            f"{RESOURCE_BASE}/ai-providers",
         }
         if parsed.path in resource_paths:
             if not authorization.startswith("Bearer ") or authorization[7:] not in api_keys:
@@ -1920,6 +1933,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, analysis_speed_view(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/errors"):
                 self.send_json(200, error_view(query, LIVE_KEYS[index]["scope"]))
+            elif parsed.path.endswith("/ai-providers"):
+                self.send_json(200, {"providers": configured_provider_views(query, index)})
             elif parsed.path.endswith("/auth-files"):
                 self.send_json(200, {"files": auth_file_views(account_auth_files(index), query, LIVE_KEYS[index]["scope"])})
             elif parsed.path.endswith("/auth-files/quota"):
@@ -1934,8 +1949,10 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(200, payload)
             elif parsed.path.endswith("/usage/models"):
                 allowed = {item["auth_index"] for item in account_auth_files(index)}
-                if query.get("auth_index", [None])[0] not in allowed | {None}:
-                    self.send_json(404, {"error": {"message": "认证文件不存在"}})
+                provider_refs = {item["ref"] for item in configured_provider_views(query, index) if item["auth_index"]}
+                if ("credential_ref" in query and query["credential_ref"][0] not in provider_refs or
+                        "credential_ref" not in query and query.get("auth_index", [None])[0] not in allowed | {None}):
+                    self.send_json(404, {"error": {"message": "Credential not found"}})
                 else:
                     self.send_json(200, usage_models(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/auth-files/history"):
@@ -2086,19 +2103,31 @@ class Handler(BaseHTTPRequestHandler):
                 if item["ref"] not in SYNCED_CREDENTIAL_REFS
             ]
             SYNCED_CREDENTIAL_REFS.clear()
+            balances = {item["auth_index"]: item["balance"] for item in CONFIG_CREDENTIALS.values() if item["balance"] is not None}
+            CONFIG_CREDENTIALS.clear()
             for item in body.get("credentials", []):
                 ref = item["ref"]
                 SYNCED_CREDENTIAL_REFS.add(ref)
+                CONFIG_CREDENTIALS[ref] = {**item, "balance": balances.get(item["auth_index"])}
                 CREDENTIALS.append({
                     "ref": ref,
                     "source": "ai-providers",
                     "provider": item["provider"],
-                    "display_name": item["display_name"],
+                    "display_name": item["key_preview"],
                     "status": "disabled" if item.get("disabled") else "active",
                     "disabled": bool(item.get("disabled")),
                     "unavailable": False,
                 })
             self.send_json(200, {"credentials": CREDENTIALS})
+        elif route == ("POST", f"{API_BASE}/ai-providers/balance"):
+            body = json.loads(request_body or b"{}")
+            credentials = [item for item in CONFIG_CREDENTIALS.values() if item["auth_index"] and item["auth_index"] == body["auth_index"]]
+            if not credentials:
+                self.send_json(404, {"error": {"message": "Credential not found"}})
+            else:
+                for credential in credentials:
+                    credential["balance"] = body["balance"]
+                self.send_json(200, body["balance"])
         elif route == ("DELETE", f"{API_BASE}/routes"):
             route_id = parse_qs(parsed.query).get("id", [""])[0]
             affected = 0

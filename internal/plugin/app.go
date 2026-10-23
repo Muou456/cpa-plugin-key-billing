@@ -118,7 +118,9 @@ func (a *App) configure(raw []byte) error {
 			return err
 		}
 		a.scheduler.configure(cfg.Routing, cfg.Enabled)
-		if loaded := a.store.ConfigCredentials(); !maps.Equal(previous, loaded) {
+		if loaded := a.store.ConfigCredentials(); !maps.EqualFunc(previous, loaded, func(left, right billing.ConfigCredential) bool {
+			return left.ConfigCredentialDetails == right.ConfigCredentialDetails
+		}) {
 			a.replaceSyncedCredentials(previous, loaded)
 		}
 		return nil

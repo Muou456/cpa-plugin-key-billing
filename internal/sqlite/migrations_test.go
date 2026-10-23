@@ -514,7 +514,7 @@ func TestV12QuotaWindowsMigrationAndRollback(t *testing.T) {
 }
 
 func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
-	for _, version := range []int{12, 13, 14, 15, 16, 17, 18, 19, 20} {
+	for _, version := range []int{12, 13, 14, 15, 16, 17, 18, 19, 20, 21} {
 		for _, conflict := range []bool{false, true} {
 			t.Run(fmt.Sprintf("v%d/conflict=%v", version, conflict), func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "legacy.db")
@@ -537,6 +537,7 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						{16, migrateRequestErrorReason}, {17, migrateUpstreamResponseReports},
 						{18, migrateRequestInfo}, {19, migrateExecutionMetadata},
 						{20, func(tx *sql.Tx) error { return migrateQuotaReports(tx, nil) }},
+						{21, migrateClientHeaders},
 					} {
 						if version >= step.version {
 							if err := step.apply(tx); err != nil {
@@ -559,7 +560,11 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						CREATE TRIGGER reject_delete BEFORE DELETE ON request_events BEGIN SELECT RAISE(ABORT,'history deleted'); END;`); err != nil {
 						t.Fatal(err)
 					}
+					if _, err := raw.Exec(`INSERT INTO config_credentials(ref,provider,key_preview,disabled) VALUES('saved','codex','sk-dum…1234',1)`); err != nil {
+						t.Fatal(err)
+					}
 				}
+
 				if conflict {
 					// Fail after adding the column, during index synchronization.
 					if _, err := raw.Exec("DROP INDEX request_events_at; CREATE TABLE request_events_at(marker TEXT)"); err != nil {
@@ -599,6 +604,20 @@ func TestRequestEventMetadataMigrationAndRollback(t *testing.T) {
 						}
 					}
 				}
+				if version >= 14 {
+					var provider, preview string
+					var disabled bool
+					if err := raw.QueryRow("SELECT provider,key_preview,disabled FROM config_credentials WHERE ref='saved'").Scan(&provider, &preview, &disabled); err != nil || provider != "codex" || preview != "sk-dum…1234" || !disabled {
+						t.Fatal("credential snapshot lost", err)
+					}
+					if !conflict {
+						var balance string
+						if err := raw.QueryRow("SELECT balance_json FROM config_credentials WHERE ref='saved'").Scan(&balance); err != nil || balance != "null" {
+							t.Fatal("migration invented a balance", balance, err)
+						}
+					}
+				}
+
 				var gotVersion, events, failures int
 				var cost float64
 				wantVersion := schemaVersion
@@ -733,11 +752,17 @@ func TestRequestErrorReasonMigration(t *testing.T) {
 	}
 }
 
-// downgradeToV19 stores quota headers with each request again, in place of
-// reports, and drops the client headers that schema 21 added.
 func downgradeToV19(t *testing.T, d *DB) {
 	t.Helper()
-	if _, err := d.db.Exec(`DROP TABLE quota_report_windows; DROP TABLE quota_reports;
+	if _, err := d.db.Exec(`
+		ALTER TABLE config_credentials DROP COLUMN auth_index;
+		ALTER TABLE config_credentials DROP COLUMN type;
+		ALTER TABLE config_credentials DROP COLUMN name;
+		ALTER TABLE config_credentials DROP COLUMN base_url;
+		ALTER TABLE config_credentials DROP COLUMN priority;
+		ALTER TABLE config_credentials DROP COLUMN weight;
+		ALTER TABLE config_credentials DROP COLUMN balance_json;
+		DROP TABLE quota_report_windows; DROP TABLE quota_reports;
 		ALTER TABLE request_events DROP COLUMN user_agent;
 		ALTER TABLE request_events DROP COLUMN x_forwarded_for;
 		ALTER TABLE request_events ADD COLUMN response_headers_json TEXT NOT NULL DEFAULT '{}';
