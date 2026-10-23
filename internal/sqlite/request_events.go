@@ -12,10 +12,7 @@ import (
 )
 
 func appendRequestEvent(tx *sql.Tx, entry billing.RequestEvent) (int64, error) {
-	execution, err := json.Marshal(entry.Execution)
-	if err != nil {
-		return 0, fmt.Errorf("Encode execution metadata: %w", err)
-	}
+	execution, _ := json.Marshal(entry.Execution)
 	// Only persistence encodes the multiplier into the price source.
 	priceSource := string(entry.PriceSource)
 	switch entry.PriceSource {

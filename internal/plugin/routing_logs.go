@@ -44,10 +44,9 @@ func credentialLogName(credential credentialView) string {
 }
 
 func (a *App) beginRouteLog(requestID, scope string, decision billing.RoutingDecision) {
-	requestID = strings.TrimSpace(requestID)
 	modelRestricted := decision.RestrictsModels()
 	credentialRestricted := decision.RestrictsCredentials()
-	if requestID == "" || (!modelRestricted && !credentialRestricted) {
+	if !modelRestricted && !credentialRestricted {
 		return
 	}
 	keyDescription := boundedLogValue(a.store.KeyDescription(scope), 256)
@@ -77,7 +76,6 @@ func (a *App) beginRouteLog(requestID, scope string, decision billing.RoutingDec
 }
 
 func (a *App) observeRouteCredential(req RequestInterceptRequest, result, detail string) {
-	requestID := strings.TrimSpace(req.RequestID)
 	credentialID := metadataString(req.Metadata, MetadataSelectedAuth)
 	credentialIndex := metadataString(req.Metadata, MetadataSelectedIndex)
 	a.routingMu.Lock()
@@ -88,10 +86,7 @@ func (a *App) observeRouteCredential(req RequestInterceptRequest, result, detail
 			a.credentialRefsByIndex[credentialIndex] = ref
 		}
 	}
-	if requestID == "" {
-		return
-	}
-	pending, ok := a.pending[requestID]
+	pending, ok := a.pending[req.RequestID]
 	if !ok {
 		return
 	}
@@ -99,15 +94,13 @@ func (a *App) observeRouteCredential(req RequestInterceptRequest, result, detail
 	pending.CredentialResult = result
 	pending.CredentialError = boundedLogValue(detail, 512)
 	pending.CredentialRestricted = result != "unrestricted"
-	a.pending[requestID] = pending
+	a.pending[req.RequestID] = pending
 }
 
 func (a *App) finishRouteLog(completion RequestCompletion) {
 	a.routingMu.Lock()
-	pending, ok := a.pending[strings.TrimSpace(completion.RequestID)]
-	if ok {
-		delete(a.pending, strings.TrimSpace(completion.RequestID))
-	}
+	pending, ok := a.pending[completion.RequestID]
+	delete(a.pending, completion.RequestID)
 	a.routingMu.Unlock()
 	if !ok {
 		return
@@ -151,10 +144,7 @@ func (a *App) finishRouteLog(completion RequestCompletion) {
 	if completion.StatusCode > 0 {
 		row["status"] = completion.StatusCode
 	}
-	raw, err := json.Marshal(row)
-	if err != nil {
-		return
-	}
+	raw, _ := json.Marshal(row)
 	level := billing.PluginLogDebug
 	switch row["credential_result"] {
 	case "deny", "unverified", routeNoCredential.result:

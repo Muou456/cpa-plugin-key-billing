@@ -45,9 +45,7 @@ const REQUEST_EVENT_COLUMNS = [
       el("div", {
         class: "request-event-cell-line mono",
         text:
-          entry.transport === "websocket"
-            ? "WS"
-            : entry.transport === "http" && typeof entry.stream === "boolean" ? entry.stream ? "SSE" : "HTTP" : "—",
+          entry.transport === "websocket" ? "WS" : entry.transport === "http" && entry.stream != null ? entry.stream ? "SSE" : "HTTP" : "—",
         ...(entry.execution ? hoverTooltipProps(() => renderExecutionTooltip(entry.execution)) : {})
       }),
       el("div", { class: "request-event-detail muted mono", text: entry.endpoint || "—" })

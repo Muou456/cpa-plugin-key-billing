@@ -246,9 +246,7 @@ func (a *App) mutateWithView(req ManagementRequest, path string, handle func(*Ap
 		view["logs_cleared"] = true
 	}
 	var result map[string]json.RawMessage
-	if err := json.Unmarshal(response.Body, &result); err != nil || result == nil {
-		return response
-	}
+	_ = json.Unmarshal(response.Body, &result)
 	result["view"], _ = json.Marshal(view)
 	return JSONResponse(response.StatusCode, result)
 }

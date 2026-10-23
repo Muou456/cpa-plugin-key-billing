@@ -87,9 +87,7 @@ func prepareWindows(windows, existing []QuotaWindow, now time.Time) ([]QuotaWind
 		oldIndex := slices.IndexFunc(existing, func(old QuotaWindow) bool { return old.ID == window.ID })
 		if window.ID == "" {
 			var id [16]byte
-			if _, err := rand.Read(id[:]); err != nil {
-				return nil, err
-			}
+			_, _ = rand.Read(id[:])
 			window.ID = hex.EncodeToString(id[:])
 		} else if oldIndex < 0 {
 			return nil, invalidf("Quota window %q no longer exists; refresh and try again", window.Name)

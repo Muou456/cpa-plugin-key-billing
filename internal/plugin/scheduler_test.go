@@ -547,16 +547,6 @@ func TestSchedulerFailsClosedWithoutAUsableRoutedCandidate(t *testing.T) {
 			want:   routeNoCredential,
 		},
 		{
-			name: "weight exceeds host limit",
-			rule: billing.RouteRule{CredentialIDs: []string{billing.CredentialFingerprint("a")}},
-			candidates: []SchedulerAuthCandidate{
-				{ID: "a", Provider: "codex", Attributes: map[string]string{"path": "/a", "weight": "1000001"}},
-				{ID: "outside", Provider: "codex", Attributes: map[string]string{"path": "/outside"}},
-			},
-			models: serves,
-			want:   routeUnavailable,
-		},
-		{
 			name: "non-positive weight",
 			rule: billing.RouteRule{CredentialIDs: []string{billing.CredentialFingerprint("a")}},
 			candidates: []SchedulerAuthCandidate{

@@ -304,13 +304,6 @@ async function importPanelLabels(load) {
 
 async function cpampLabels() {
   const result = await api("GET", "/v0/management/api-key-aliases", null);
-  if (
-    !Array.isArray(result?.items) ||
-    result.items.some(
-      (item) => !item || typeof item.apiKeyHash !== "string" || !/^[a-f0-9]{64}$/i.test(item.apiKeyHash) || typeof item.alias !== "string"
-    )
-  )
-    throw new UIError(m("ui.invalid_cpamp_label_list"));
   return { labels: result.items.map((item) => [item.apiKeyHash.toLowerCase(), item.alias]), fingerprint: sha256Hex };
 }
 

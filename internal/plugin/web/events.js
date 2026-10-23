@@ -106,7 +106,7 @@ function readEventKeys(reload) {
     JSON.stringify(sharedTimeRanges.admin),
     async () => {
       const revision = keyDirectory.beginRead();
-      const keys = requireArray(await plugin("GET", "/events/keys?" + new URLSearchParams(range)), m("ui.event_api_keys"));
+      const keys = await plugin("GET", "/events/keys?" + new URLSearchParams(range));
       return keyDirectory.receive(keys, revision);
     },
     reload

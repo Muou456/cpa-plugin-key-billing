@@ -320,10 +320,7 @@ func migrateModelGroups(tx *sql.Tx) error {
 		}
 		groups[i].id = route.ID
 		groups[i].models = route.Rule.Models
-		raw, err := json.Marshal(route.Rule)
-		if err != nil {
-			return err
-		}
+		raw, _ := json.Marshal(route.Rule)
 		if _, err = tx.Exec("INSERT INTO routes(position,id,name,rule_json) VALUES(?,?,?,?)", i, route.ID, route.Name, string(raw)); err != nil {
 			return fmt.Errorf("Migrate model group %s: %w", group.oldID, err)
 		}
@@ -379,10 +376,7 @@ func migrateModelGroups(tx *sql.Tx) error {
 		if err != nil {
 			return fmt.Errorf("Validate migrated bindings for API key %s: %w", scope, err)
 		}
-		raw, err := json.Marshal(bindings)
-		if err != nil {
-			return err
-		}
+		raw, _ := json.Marshal(bindings)
 		if _, err = tx.Exec("UPDATE api_keys SET route_bindings_json=? WHERE scope=?", string(raw), scope); err != nil {
 			return fmt.Errorf("Migrate API key %s: %w", scope, err)
 		}
@@ -438,10 +432,7 @@ func migrateLegacyRouteBindings(tx *sql.Tx) error {
 		if err != nil {
 			return fmt.Errorf("Validate legacy routing bindings for API key %s: %w", scope, err)
 		}
-		converted, err := json.Marshal(bindings)
-		if err != nil {
-			return err
-		}
+		converted, _ := json.Marshal(bindings)
 		updates[scope] = string(converted)
 	}
 	if err = rows.Close(); err != nil {

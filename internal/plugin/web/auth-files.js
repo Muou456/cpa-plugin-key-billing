@@ -126,12 +126,7 @@ function restoreAuthQuotaCache(account) {
 async function readCPAAuthSubscriptions() {
   try {
     const result = await api("GET", "/v0/management/auth-files", null, { keepSessionOnForbidden: true });
-    return new Map(
-      requireArray(result?.files, m("ui.auth_files")).map((file) => [
-        file.auth_index,
-        Date.parse(file.id_token?.chatgpt_subscription_active_until)
-      ])
-    );
+    return new Map(result.files.map((file) => [file.auth_index, Date.parse(file.id_token?.chatgpt_subscription_active_until)]));
   } catch (err) {
     if (err instanceof AuthError || err instanceof StaleRequestError) throw err;
     return new Map();
@@ -150,7 +145,7 @@ function readAuthFiles(account, reload = false) {
         account ? null : readCPAAuthSubscriptions()
       ]);
       // A breakdown selects the same requests as its total.
-      return requireArray(result?.files, m("ui.auth_files")).map((file) => ({
+      return result.files.map((file) => ({
         ...file,
         subscription_until: subscriptions?.get(file.auth_index),
         usage_query: { auth_index: file.auth_index, ...range }
@@ -253,7 +248,7 @@ function renderQuotaMetrics(usage, scale = 1, tooltip = null) {
 }
 
 function renderQuotaBar(percent, label) {
-  const known = Number.isFinite(percent);
+  const known = percent != null;
   const level = percent >= 70 ? "high" : percent >= 30 ? "medium" : "low";
   return el(
     "div",
@@ -289,7 +284,7 @@ function renderQuotaRow(row, account, estimate) {
       { class: "auth-quota-head" },
       el("span", { class: "auth-quota-label", "data-tip": label, "data-tip-overflow": "", text: label }),
       reset.at && el("span", { class: "auth-quota-reset-after", text: elapsed ? m("ui.quota_reset_elapsed") : reset.after }),
-      el("span", { class: "auth-quota-value", text: Number.isFinite(percent) ? percent.toFixed(0) + "%" : "—" })
+      el("span", { class: "auth-quota-value", text: percent != null ? percent.toFixed(0) + "%" : "—" })
     ),
     renderQuotaBar(percent, label),
     (usage || amount || reset.at) &&
@@ -360,7 +355,7 @@ function renderAuthFileQuota(file, account) {
     const credits = result.credits_unlimited ? m("ui.unlimited") : quotaNumber(balance, result.credit_currency);
     summary.push(el("span", { text: m("ui.credits_value", { v0: credits }) }));
   }
-  if (Number.isFinite(result.rate_limit_reset_credits_available_count)) {
+  if (result.rate_limit_reset_credits_available_count != null) {
     summary.push(el("span", { text: m("ui.available_resets_value", { v0: int(result.rate_limit_reset_credits_available_count) }) }));
   }
   const rows = result.quota;
@@ -518,11 +513,7 @@ async function setAuthFileEnabled(file, enabled) {
     if (error instanceof AuthError || error instanceof StaleRequestError) throw error;
     throw new UIError(m(enabled ? "ui.enable_auth_file_failed_value" : "ui.disable_auth_file_failed_value", { v0: error.message }));
   }
-  try {
-    // A list read already in flight started before this change, so only the next read confirms it.
-    await authFilesQueries.admin.task?.catch(() => {});
-    await readAuthFiles(false, true);
-  } finally {
+  try { await readAuthFiles(false, true); } finally {
     owner.authStatusSubmissions.delete(file.auth_index);
     if (owner === adminUIState) renderAuthFiles(false);
   }
@@ -628,8 +619,6 @@ async function loadAuthQuota(file, account) {
     const path = "/auth-files/quota?auth_index=" + encodeURIComponent(file.auth_index);
     const opts = { timeoutMS: AUTH_QUOTA_TIMEOUT_MS };
     const result = account ? await accountAPI(path, opts) : await plugin("GET", path, null, opts);
-    requireObject(result, m("ui.upstream_quota"));
-    requireArray(result.quota, m("ui.upstream_quota"));
     if (authQuotaCacheCurrent(account, owner, generation, file.auth_index)) owner.authQuotas.set(file.auth_index, result);
   } catch (error) {
     if (error instanceof AuthError || error instanceof StaleRequestError) throw error;
@@ -707,8 +696,7 @@ async function loadAuthDrawerHistory() {
   const request = ++authDrawer.request;
   try {
     const path = "/auth-files/history?auth_index=" + encodeURIComponent(file.auth_index);
-    const history = requireObject(account ? await accountAPI(path) : await plugin("GET", path), m("ui.quota_windows"));
-    requireArray(history.windows, m("ui.quota_windows"));
+    const history = account ? await accountAPI(path) : await plugin("GET", path);
     if (request === authDrawer.request) Object.assign(authDrawer, { history, error: "" });
   } catch (error) {
     if (error instanceof AuthError || error instanceof StaleRequestError) throw error;
@@ -738,7 +726,7 @@ function renderAuthDrawerResets(file, account) {
   const result = owner.authQuotas.get(file.auth_index);
   const error = owner.authQuotaErrors.get(file.auth_index);
   const count = result?.rate_limit_reset_credits_available_count;
-  setText($("auth-drawer-reset-count"), Number.isFinite(count) ? int(count) : "");
+  setText($("auth-drawer-reset-count"), count != null ? int(count) : "");
   const reset = $("auth-drawer-reset");
   reset.classList.toggle("hidden", account && resources.account.profile.value?.can_reset_auth_quota !== true);
   reset.disabled = !canResetAuthQuota(file, account);

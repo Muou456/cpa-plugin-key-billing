@@ -32,7 +32,7 @@ function quotaTokens(n) {
 function exactTokens(value) { return Math.trunc(Number(value || 0)).toLocaleString("en-US"); }
 function latency(value) {
   const milliseconds = Number(value || 0);
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "—";
+  if (milliseconds <= 0) return "—";
   if (milliseconds < 1000) return Math.round(milliseconds) + " ms";
   return (milliseconds / 1000).toFixed(2) + " s";
 }

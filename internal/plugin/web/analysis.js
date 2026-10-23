@@ -57,22 +57,11 @@ function readAnalysis(account, reload) {
     selection,
     async () => {
       const revision = keyDirectory.beginRead();
-      const value = requireObject(
-        await (account ? accountAPI("/analysis?" + params) : plugin("GET", "/analysis?" + params)),
-        m("ui.analysis")
-      );
-      requireObject(value.summary, m("ui.analysis_summary"));
-      requireObject(value.trends, m("ui.analysis_trends"));
-      requireObject(value.summary.cost, m("ui.cost_analysis"));
-      for (const name of ["requests", "total_tokens", "total_cost", "cache_rate"])
-        requireArray(value.trends[name], m("ui.analysis_trends"));
+      const value = await (account ? accountAPI("/analysis?" + params) : plugin("GET", "/analysis?" + params));
       value.usage_query = usage;
       if (!account) {
-        const distribution = requireObject(value.usage_distribution, m("ui.usage_distribution"));
-        distribution.api_keys = keyDirectory.receive(requireArray(distribution.api_keys, m("ui.api_key_usage_distribution")), revision, {
-          field: "key",
-          fallback: true
-        });
+        const distribution = value.usage_distribution;
+        distribution.api_keys = keyDirectory.receive(distribution.api_keys, revision, { field: "key", fallback: true });
       }
       return value;
     },
@@ -109,15 +98,7 @@ function readSpeed(account, reload) {
   params.set("model", model);
   return speedQueries[role].read(
     speedKey(role, model),
-    async () => {
-      const value = requireObject(
-        await (account ? accountAPI("/analysis/speed?" + params) : plugin("GET", "/analysis/speed?" + params)),
-        m("ui.speed_trend")
-      );
-      requireObject(value.summary, m("ui.speed_trend"));
-      requireArray(value.trend, m("ui.speed_trend"));
-      return value;
-    },
+    () => (account ? accountAPI("/analysis/speed?" + params) : plugin("GET", "/analysis/speed?" + params)),
     reload
   );
 }

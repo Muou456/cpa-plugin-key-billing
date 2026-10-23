@@ -8,20 +8,18 @@ const MaxConcurrencyLimit = 10000
 // slot. Active is the number of slots already occupied when a request is
 // refused, or the number occupied after a successful reservation.
 type SlotDecision struct {
-	Allowed  bool
-	Acquired bool
-	Limit    int
-	Active   int
+	Allowed bool
+	Limit   int
+	Active  int
 }
 
 // AcquireSlot atomically checks and reserves one API-key-scoped generation
 // slot. Every attributable generation is tracked even while its limit is zero,
 // so lowering an unlimited key to a finite limit immediately accounts for
-// requests that were already running.
+// requests that were already running. CPA assigns a unique ID to each execution.
 func (s *Store) AcquireSlot(scope, requestID string) SlotDecision {
 	decision := SlotDecision{Allowed: true}
 	scope = strings.TrimSpace(scope)
-	requestID = strings.TrimSpace(requestID)
 	if scope == "" {
 		return decision
 	}
@@ -33,19 +31,6 @@ func (s *Store) AcquireSlot(scope, requestID string) SlotDecision {
 		decision.Limit = key.ConcurrencyLimit
 	}
 	decision.Active = s.activeByScope[scope]
-	if requestID == "" {
-		// A finite limit cannot be enforced safely without an exact completion
-		// correlation. Current compatible hosts always provide RequestID.
-		decision.Allowed = decision.Limit <= 0
-		return decision
-	}
-	if existingScope, exists := s.activeRequests[requestID]; exists {
-		decision.Allowed = existingScope == scope
-		// The original admission owns this reservation. Reporting a duplicate
-		// as newly acquired would let a later admission check roll it back.
-		decision.Acquired = false
-		return decision
-	}
 	if decision.Limit > 0 && decision.Active >= decision.Limit {
 		decision.Allowed = false
 		return decision
@@ -54,17 +39,11 @@ func (s *Store) AcquireSlot(scope, requestID string) SlotDecision {
 	s.activeRequests[requestID] = scope
 	s.activeByScope[scope] = decision.Active + 1
 	decision.Active++
-	decision.Acquired = true
 	return decision
 }
 
-// ReleaseSlot idempotently releases the slot reserved for requestID. Unknown
-// and duplicate completion events are harmless.
+// ReleaseSlot releases a generation slot; rejected and non-generating requests have none.
 func (s *Store) ReleaseSlot(requestID string) bool {
-	requestID = strings.TrimSpace(requestID)
-	if requestID == "" {
-		return false
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	scope, exists := s.activeRequests[requestID]

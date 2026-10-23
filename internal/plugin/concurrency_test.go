@@ -62,7 +62,6 @@ func TestConcurrencyLimitRejectsAndCompletionReleases(t *testing.T) {
 	}
 
 	completeRequest(t, app, "request-1")
-	completeRequest(t, app, "request-1")
 	if retry := interceptWithID(t, app, "request-3", true); retry.Terminate {
 		t.Fatalf("retry response = %+v", retry)
 	}
@@ -92,16 +91,5 @@ func TestQuotaRejectionRollsBackConcurrencySlot(t *testing.T) {
 	}
 	if current := app.store.KeyViews()[0].CurrentConcurrency; current != 0 {
 		t.Fatalf("CurrentConcurrency = %d, want the refused request released", current)
-	}
-}
-
-func TestFiniteLimitRequiresRequestID(t *testing.T) {
-	app := concurrencyApp(t, 1)
-	response := interceptWithID(t, app, "", true)
-	if !response.Terminate || response.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("response = %+v, want fail-closed admission without RequestID", response)
-	}
-	if current := app.store.KeyViews()[0].CurrentConcurrency; current != 0 {
-		t.Fatalf("CurrentConcurrency = %d, want no leaked slot", current)
 	}
 }

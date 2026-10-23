@@ -62,11 +62,8 @@ func candidateWeight(candidate SchedulerAuthCandidate) int64 {
 	if raw == "" {
 		return 1
 	}
-	weight, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || weight <= 0 || weight > 1_000_000 {
-		return 0
-	}
-	return weight
+	weight, _ := strconv.ParseInt(raw, 10, 64)
+	return max(0, weight)
 }
 
 func routingPoolKey(provider, model string, decision billing.RoutingDecision) string {

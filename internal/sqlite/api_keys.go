@@ -28,10 +28,7 @@ func saveKey(tx *sql.Tx, scope string, key *billing.KeyState) error {
 	if strings.TrimSpace(scope) == "" || strings.TrimSpace(key.Preview) == "" {
 		return fmt.Errorf("API key identifier and masked preview are required")
 	}
-	bindings, errJSON := json.Marshal(key.RouteBindings)
-	if errJSON != nil {
-		return fmt.Errorf("Save routing bindings for API key %s: %w", scope, errJSON)
-	}
+	bindings, _ := json.Marshal(key.RouteBindings)
 	cycles := key.Cycles
 	if cycles == nil {
 		cycles = map[string]billing.QuotaCycle{}

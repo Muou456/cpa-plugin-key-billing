@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -21,12 +22,13 @@ func flowMetadata() map[string]any {
 	return map[string]any{MetadataCallerScope: flowScope()}
 }
 
-func admit(t *testing.T, app *App, clientFormat, requestPath string) {
+func admit(t *testing.T, app *App, clientFormat, requestPath string) string {
 	t.Helper()
+	requestID := rand.Text()
 	metadata := flowMetadata()
 	metadata[MetadataRequestPath] = requestPath
 	raw, errHandle := app.HandleMethod(MethodRequestInterceptBefore, mustMarshal(t, RequestInterceptRequest{
-		SourceFormat: clientFormat, Model: flowModel, RequestedModel: flowModel, Metadata: metadata,
+		RequestID: requestID, SourceFormat: clientFormat, Model: flowModel, RequestedModel: flowModel, Metadata: metadata,
 	}))
 	if errHandle != nil {
 		t.Fatalf("request.intercept_before error = %v", errHandle)
@@ -36,6 +38,7 @@ func admit(t *testing.T, app *App, clientFormat, requestPath string) {
 	if response.Terminate {
 		t.Fatalf("request was terminated: %s", response.ResponseBody)
 	}
+	return requestID
 }
 
 func publishUsageRecord(t *testing.T, app *App, record UsageRecord) {

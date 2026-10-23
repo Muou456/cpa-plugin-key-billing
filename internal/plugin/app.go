@@ -18,8 +18,7 @@ type App struct {
 	hostCaller            HostCaller
 	requestOrigins        map[requestOriginKey]*list.Element
 	requestOriginOrder    list.List
-	admissionsMu          sync.Mutex
-	admissions            map[string]*requestAdmission
+	requestOriginsMu      sync.Mutex
 	routingMu             sync.Mutex
 	credentials           map[string]credentialView
 	credentialIdentities  map[string]billing.CredentialProviderSelector
@@ -42,7 +41,6 @@ func newApp(store *billing.Store) *App {
 	return &App{
 		store:                 store,
 		requestOrigins:        make(map[requestOriginKey]*list.Element),
-		admissions:            make(map[string]*requestAdmission),
 		credentials:           make(map[string]credentialView),
 		credentialIdentities:  make(map[string]billing.CredentialProviderSelector),
 		credentialRefsByIndex: make(map[string]string),
@@ -54,9 +52,7 @@ func openRepository(path string) (billing.Repository, error) {
 	return sqlite.Open(path, quotaHeaderReport)
 }
 
-// HandleMethod dispatches one host RPC call. A panic anywhere below is
-// converted into an error envelope: the host fuses a panicking plugin, and
-// taking the whole proxy down over a billing bug is not an acceptable trade.
+// HandleMethod keeps panics from crossing the plugin's C ABI boundary.
 func (a *App) HandleMethod(method string, request []byte) (response []byte, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -65,10 +61,6 @@ func (a *App) HandleMethod(method string, request []byte) (response []byte, err 
 			a.store.AddPluginLog(billing.PluginLogError, "%v", err)
 		}
 	}()
-	return a.handleMethod(method, request)
-}
-
-func (a *App) handleMethod(method string, request []byte) ([]byte, error) {
 	switch method {
 	case MethodPluginRegister, MethodPluginReconfigure:
 		if errConfigure := a.configure(request); errConfigure != nil {

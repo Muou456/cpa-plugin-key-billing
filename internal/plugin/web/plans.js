@@ -76,8 +76,7 @@ function renderPlans() {
 }
 
 function remainingQuota(usedPercent) {
-  const used = Number(usedPercent || 0);
-  const percent = 100 - Math.max(0, Math.min(100, Number.isFinite(used) ? used : 0));
+  const percent = 100 - Math.max(0, Math.min(100, usedPercent || 0));
   return { percent, level: percent >= 70 ? "high" : percent >= 30 ? "medium" : "low" };
 }
 

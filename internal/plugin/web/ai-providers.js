@@ -100,17 +100,10 @@ const AI_BALANCE_BATCH_CONCURRENCY = 3;
 const AI_BALANCE_CACHE_PREFIX = "cpa-key-billing.ai-balances.v1.admin.";
 
 function configuredAIProviders(kind, entries) {
-  const text = (value) => (typeof value === "string" ? value.trim() : "");
-  // CPA weighs a credential without a weight as 1 and a negative one as 0.
-  const weight = (value) => (Number.isFinite(value) ? Math.max(0, value) : 1);
+  const text = (value) => (value || "").trim();
   const providers = [];
   for (const entry of entries) {
-    const base = {
-      type: kind.type,
-      brand: kind.brand,
-      base_url: text(entry["base-url"]),
-      priority: Number.isFinite(entry.priority) ? entry.priority : 0
-    };
+    const base = { type: kind.type, brand: kind.brand, base_url: text(entry["base-url"]), priority: entry.priority ?? 0 };
     if (kind.list !== "openai-compatibility") {
       const key = text(entry["api-key"]);
       // CPA loads no credential for an entry with neither a key nor a base URL.
@@ -120,7 +113,7 @@ function configuredAIProviders(kind, entries) {
         ...base,
         auth_index: text(entry["auth-index"]),
         key_preview: previewCredential(key),
-        weight: weight(entry.weight),
+        weight: Math.max(0, entry.weight ?? 1),
         disabled: excluded.some((model) => model.trim() === "*")
       });
       continue;
@@ -134,7 +127,7 @@ function configuredAIProviders(kind, entries) {
         ...provider,
         auth_index: text(key["auth-index"]),
         key_preview: previewCredential(text(key["api-key"])),
-        weight: weight(key.weight)
+        weight: Math.max(0, key.weight ?? 1)
       });
     }
   }
@@ -144,14 +137,8 @@ function configuredAIProviders(kind, entries) {
 async function fetchAIProviders() {
   const lists = await Promise.all(
     AI_PROVIDER_TYPES.map(async (kind) => {
-      let config;
-      try { config = requireObject(await api("GET", "/v0/management/" + kind.list, null), m("ui.ai_providers")); } catch (error) {
-        // Earlier CLIProxyAPI versions have no list for later provider types.
-        if (error.status === 404) return [];
-        throw error;
-      }
-      if (!Object.hasOwn(config, kind.list)) throw new UIError(m("ui.invalid_response_for_value", { v0: m("ui.ai_providers") }));
-      return configuredAIProviders(kind, configuredCredentialEntries(config, kind.list));
+      const config = await api("GET", "/v0/management/" + kind.list, null);
+      return configuredAIProviders(kind, config[kind.list] || []);
     })
   );
   const providers = lists.flat();
@@ -162,7 +149,7 @@ async function fetchAIProviders() {
     await Promise.all(
       batchedSearchParams("auth_index", indexes).map(async (query) => {
         for (const [name, value] of Object.entries(range)) query.set(name, value);
-        Object.assign(usage, requireObject((await plugin("GET", "/ai-providers/usage?" + query))?.usage, m("ui.ai_providers")));
+        Object.assign(usage, (await plugin("GET", "/ai-providers/usage?" + query)).usage);
       })
     );
   }
@@ -241,6 +228,16 @@ function aiBalanceUpstream(provider) {
   return upstream ? { read: upstream.read, host } : null;
 }
 
+function requireObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new UIError(m("ui.invalid_response_for_value", { v0: label }));
+  return value;
+}
+
+function requireArray(value, label) {
+  if (!Array.isArray(value)) throw new UIError(m("ui.invalid_response_for_value", { v0: label }));
+  return value;
+}
+
 function balanceAmount(value) {
   const amount = typeof value === "string" && value.trim() ? Number(value) : value;
   if (typeof amount !== "number" || !Number.isFinite(amount))
@@ -272,12 +269,7 @@ async function upstreamBalanceJSON(provider, url) {
     url,
     header: { Authorization: "Bearer $TOKEN$", Accept: "application/json" }
   };
-  const result = requireObject(
-    await api("POST", "/v0/management/api-call", request, { timeoutMS: AI_BALANCE_TIMEOUT_MS }),
-    m("ui.balance")
-  );
-  if (!Number.isInteger(result.status_code) || result.status_code < 100 || result.status_code > 599)
-    throw new UIError(m("ui.invalid_response_for_value", { v0: m("ui.balance") }));
+  const result = await api("POST", "/v0/management/api-call", request, { timeoutMS: AI_BALANCE_TIMEOUT_MS });
   if (!(result.status_code >= 200 && result.status_code < 300)) {
     throw new UIError(m("ui.upstream_returned_http_value", { v0: result.status_code }));
   }
@@ -303,7 +295,6 @@ async function loadAIBalance(provider) {
           .map(([label, ...amounts]) => [label, ...amounts.map(balanceAmount)])
       }))
     };
-    if (!validAIBalanceResult(result)) throw new UIError(m("ui.invalid_response_for_value", { v0: m("ui.balance") }));
     if (owner === adminUIState && aiProvidersQuery.value?.some((item) => item.auth_index === index)) owner.aiBalances.set(index, result);
   } catch (error) {
     if (error instanceof AuthError || error instanceof StaleRequestError) throw error;

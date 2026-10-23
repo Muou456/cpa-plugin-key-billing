@@ -204,16 +204,6 @@ async function api(method, path, body, opts) {
 const plugin = (method, path, body, opts) => api(method, PLUGIN_BASE + path, body, opts);
 const accountAPI = (path, opts) => api("GET", ACCOUNT_BASE + path, null, opts);
 
-function requireObject(value, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new UIError(m("ui.invalid_response_for_value", { v0: label }));
-  return value;
-}
-
-function requireArray(value, label) {
-  if (!Array.isArray(value)) throw new UIError(m("ui.invalid_response_for_value", { v0: label }));
-  return value;
-}
-
 async function settleLoads(tasks) {
   const results = await Promise.allSettled(tasks);
   const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);

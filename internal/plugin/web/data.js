@@ -194,43 +194,21 @@ async function fetchListPage(kind, account, params, previous = null) {
   const query = new URLSearchParams({ ...params, ...previous?.cursor });
   const path = view.endpoint + "?" + query;
   const revision = keyDirectory.beginRead();
-  const page = requireObject(await (account ? accountAPI(path) : plugin("GET", path)), view.label);
-  const entries = requireArray(page.entries, view.label);
-  const integer = (value) => Number.isSafeInteger(value) && value >= 0;
-  const id = (value) => (typeof value === "string" && /^-?\d+$/.test(value)) || Number.isSafeInteger(value);
-  const invalid = () => { throw new UIError(m("ui.invalid_pagination_response_for_value", { v0: view.label })); };
-  if (entries.length > Number(params.limit) || entries.some((entry) => !entry || !id(entry.id))) invalid();
+  const page = await (account ? accountAPI(path) : plugin("GET", path));
+  const entries = page.entries;
   let cursor = null;
   if (view.timed) {
-    if (!integer(page.total) || !id(page.snapshot_id) || Number(page.snapshot_id) < 0) invalid();
-    if (previous?.cursor && String(page.snapshot_id) !== previous.cursor.snapshot_id) invalid();
-    // Retention may change totals or leave short/empty pages. Offset uses
-    // the actual response length, independently of display deduplication.
+    // Retention may change totals or leave short/empty pages.
     const offset = (previous?.cursor?.offset || 0) + entries.length;
     if (entries.length && offset < page.total) cursor = { offset, snapshot_id: String(page.snapshot_id) };
-  } else {
-    if (!Object.values(requireObject(page.level_counts, m("ui.log_level_counts"))).every(integer)) invalid();
-    const next = page.next_before_id ?? 0;
-    if (!id(next) || Number(next) < 0) invalid();
-    if (BigInt(next)) {
-      if (!entries.length || (previous?.cursor && BigInt(next) >= BigInt(previous.cursor.before_id))) invalid();
-      cursor = { before_id: String(next) };
-    }
-  }
+  } else if (page.next_before_id) { cursor = { before_id: String(page.next_before_id) }; }
   return { page, params, cursor, previous, revision };
 }
 
 // createQuery calls this only after accepting the response. Stale reads
 // cannot publish Key metadata or append rows to a newer selection.
 function mergeListPage(kind, account, { page, params, cursor, previous, revision }) {
-  const seen = new Set((previous?.page.entries || []).map((entry) => String(entry.id)));
-  const incoming = page.entries.filter((entry) => {
-    const id = String(entry.id);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-  const rows = PAGED_LIST_VIEWS[kind].keyed && !account ? keyDirectory.receive(incoming, revision) : incoming;
+  const rows = PAGED_LIST_VIEWS[kind].keyed && !account ? keyDirectory.receive(page.entries, revision) : page.entries;
   return {
     page: {
       ...page,
@@ -408,7 +386,7 @@ function saveChoice(role, id) {
 
 async function fetchAdminCollection(name) {
   const result = await plugin("GET", "/" + name);
-  return requireArray(result?.[name], resources.admin[name].label);
+  return result[name];
 }
 
 function editorData(kind) {
@@ -438,7 +416,7 @@ function queueAdminData(group, operation) {
 
 async function readAdminConfiguration(read) {
   // Keep plaintext configuration out of the resource cache.
-  const config = api("GET", "/v0/management/config", null).then((value) => requireObject(value, m("ui.cpa_configuration")));
+  const config = api("GET", "/v0/management/config", null);
   const configuredKeys = config.then(parseConfiguredAPIKeys);
   const errors = [];
   const sync = async (label, operation) => {
@@ -470,10 +448,7 @@ function writeAdmin(method, path, data = null, options) {
     if (path.startsWith("/prices")) body.models = models || [];
     const result = await plugin(method, path + (path.includes("?") ? "&" : "?") + "view=1", body, { ...options, command: true });
     current();
-    // Display errors must not turn a committed write into a failed save.
-    try { applyAdminView(requireObject(result.view, m("ui.save_result")), models); } catch (error) {
-      notify(m("ui.saved_but_failed_to_update_the_view_value", { v0: error.message }), "err");
-    }
+    applyAdminView(result.view, models);
     return result;
   });
 }
@@ -482,13 +457,13 @@ function applyAdminView(view, models) {
   for (const name of ["keys", "plans", "routes"]) {
     if (!Object.hasOwn(view, name)) continue;
     const resource = resources.admin[name];
-    const rows = requireArray(view[name], resource.label);
+    const rows = view[name];
     // A committed view supersedes metadata from any read already in flight.
     Object.assign(resource, { value: name === "keys" ? keyDirectory.receive(rows) : rows, error: "" });
   }
   const catalog = resources.admin.catalog;
   if (Object.hasOwn(view, "prices")) {
-    const prices = requireArray(view.prices, catalog.label);
+    const prices = view.prices;
     catalog.value = { models, prices: prices.map((price) => ({ ...price, in_models: models === null ? undefined : price.in_models })) };
     catalog.error = "";
   }
@@ -533,8 +508,7 @@ async function fetchModelPrices(models, account) {
     batch.set("include_custom", String(!account && index === 0));
     const path = "/prices?" + batch.toString();
     const rows = await (account ? accountAPI(path) : plugin("GET", path));
-    for (const row of requireArray(rows, m("ui.model_prices"))) {
-      if (!row || typeof row.model_id !== "string") throw new UIError(m("ui.invalid_model_price_response"));
+    for (const row of rows) {
       const key = row.model_id.toLowerCase();
       const previous = prices.get(key);
       prices.set(key, { ...row, in_models: row.in_models || previous?.in_models || false });
@@ -552,8 +526,7 @@ async function fetchConfiguredAPIKeys() {
 async function fetchModels(account, key) {
   const headers = account ? {} : { "X-CPA-Key-Billing-Models": "all" };
   const result = await api("GET", "/v1/models", null, { key, headers, auxiliaryCredential: !account });
-  const rows = requireArray(result?.data, m("ui.cpa_model_list"));
-  if (rows.some((row) => !row || typeof row.id !== "string" || !row.id.trim())) throw new UIError(m("ui.invalid_cpa_model_list"));
+  const rows = result.data;
   const models = [...new Set(rows.map((row) => row.id))].sort(compareModelId);
   const previous = resources[account ? "account" : "admin"].models.value;
   // The model list is the catalog's input. Preserve its identity when
@@ -566,20 +539,6 @@ async function fetchCatalog(account) {
   if (account && models === null) throw new UIError(m("ui.model_catalog_is_not_available_yet"));
   const prices = await fetchModelPrices(models || [], account);
   return { models, prices: prices.map((price) => ({ ...price, in_models: models === null ? undefined : price.in_models })) };
-}
-
-async function fetchAccountData(name) {
-  const result = requireObject(await accountAPI("/" + name), name);
-  if (name === "profile" && typeof result.tracked !== "boolean") throw new UIError(m("ui.invalid_account_profile_response"));
-  if (name === "subscription") {
-    requireObject(result.subscription, m("ui.subscription"));
-    requireObject(result.concurrency, m("ui.concurrency_status"));
-  }
-  if (name === "routing") {
-    requireArray(result.models, m("ui.model_permissions"));
-    requireArray(result.credentials, m("ui.credential_permissions"));
-  }
-  return result;
 }
 
 function dataGroupCached(account, group) {
@@ -617,13 +576,10 @@ function loadDataGroup(account, name, reload = false) {
     };
     if (account) {
       await read(name, () =>
-        name === "models" ? fetchModels(true, authKey) : name === "catalog" ? fetchCatalog(true) : fetchAccountData(name)
+        name === "models" ? fetchModels(true, authKey) : name === "catalog" ? fetchCatalog(true) : accountAPI("/" + name)
       );
     } else if (name === "configuration") { group.syncErrors = await readAdminConfiguration(read); } else if (name === "pricing") {
-      await settleLoads([
-        read("catalog", () => fetchCatalog(false)),
-        read("priceStatus", async () => requireObject(await plugin("GET", "/prices/reference/status"), m("ui.reference_price_status")))
-      ]);
+      await settleLoads([read("catalog", () => fetchCatalog(false)), read("priceStatus", () => plugin("GET", "/prices/reference/status"))]);
     }
     if (generation !== sessionGeneration) throw new StaleRequestError();
     if (account && name !== "profile" && !resources.account.profile.value?.tracked) return;

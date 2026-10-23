@@ -16,41 +16,6 @@ import (
 // Bound the retry hint so clients periodically recheck quota availability.
 const maxRetryAfterSeconds = 3600
 
-// Only in-flight admission calls need a completion marker. Once they return,
-// the Store's concurrency slots are sufficient for lifecycle bookkeeping.
-type requestAdmission struct {
-	calls     int
-	completed bool
-}
-
-func (a *App) beginAdmission(requestID string) *requestAdmission {
-	requestID = strings.TrimSpace(requestID)
-	if requestID == "" {
-		return nil
-	}
-	a.admissionsMu.Lock()
-	defer a.admissionsMu.Unlock()
-	admission := a.admissions[requestID]
-	if admission == nil {
-		admission = &requestAdmission{}
-		a.admissions[requestID] = admission
-	}
-	admission.calls++
-	return admission
-}
-
-func (a *App) endAdmission(requestID string, admission *requestAdmission) {
-	if admission == nil {
-		return
-	}
-	a.admissionsMu.Lock()
-	defer a.admissionsMu.Unlock()
-	admission.calls--
-	if admission.calls == 0 {
-		delete(a.admissions, strings.TrimSpace(requestID))
-	}
-}
-
 const (
 	maxRequestOrigins = 16384
 	// Client headers are display metadata; longer values stay unknown rather
@@ -69,7 +34,6 @@ type requestOrigin struct {
 
 // Retain origins after request.complete: usage is asynchronous and retries or
 // WebSocket turns can report more than one record for the same inbound trace.
-// Admission bookkeeping and origins share the existing request-state lock.
 func (a *App) rememberRequestOrigin(req RequestInterceptRequest, scope, endpoint string) {
 	key := requestOriginKey{strings.TrimSpace(req.TraceID), scope}
 	endpoint = requestEndpoint(endpoint)
@@ -85,8 +49,8 @@ func (a *App) rememberRequestOrigin(req RequestInterceptRequest, scope, endpoint
 	if headerHasToken(req.Headers, "Connection", "upgrade") && headerHasToken(req.Headers, "Upgrade", "websocket") {
 		reported.Transport = "websocket"
 	}
-	a.admissionsMu.Lock()
-	defer a.admissionsMu.Unlock()
+	a.requestOriginsMu.Lock()
+	defer a.requestOriginsMu.Unlock()
 	if entry := a.requestOrigins[key]; entry != nil {
 		origin := entry.Value.(*requestOrigin)
 		if origin.RequestOrigin != reported {
@@ -105,8 +69,8 @@ func (a *App) rememberRequestOrigin(req RequestInterceptRequest, scope, endpoint
 }
 
 func (a *App) findRequestOrigin(traceID, scope string) billing.RequestOrigin {
-	a.admissionsMu.Lock()
-	defer a.admissionsMu.Unlock()
+	a.requestOriginsMu.Lock()
+	defer a.requestOriginsMu.Unlock()
 	entry := a.requestOrigins[requestOriginKey{strings.TrimSpace(traceID), scope}]
 	if entry == nil {
 		return billing.RequestOrigin{}
@@ -154,11 +118,6 @@ func (a *App) interceptBeforeAuth(raw []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Parse request interception parameters: %w", errUnmarshal)
 	}
 	helper := metadataString(req.Metadata, MetadataSource) == SourcePluginHostModelCallback
-	var admission *requestAdmission
-	if !helper {
-		admission = a.beginAdmission(req.RequestID)
-		defer a.endAdmission(req.RequestID, admission)
-	}
 	if !a.store.Enabled() {
 		return OKEnvelope(RequestInterceptResponse{})
 	}
@@ -191,27 +150,11 @@ func (a *App) interceptBeforeAuth(raw []byte) ([]byte, error) {
 	if value, ok := req.Metadata[MetadataGenerate].(bool); ok {
 		generate = value
 	}
-	// Completion and the final admission commit share this lock. Checking the
-	// marker alone would still let completion race with slot/cycle creation.
-	a.admissionsMu.Lock()
-	defer a.admissionsMu.Unlock()
-	if admission != nil && admission.completed {
-		return OKEnvelope(priceRefusal(req.SourceFormat, "request_completed", "The request has already completed"))
-	}
-	slot := billing.SlotDecision{Allowed: true}
-	admitted := false
 	if generate {
-		slot = a.store.AcquireSlot(scope, req.RequestID)
+		slot := a.store.AcquireSlot(scope, req.RequestID)
 		if !slot.Allowed {
 			return OKEnvelope(concurrencyLimitResponse(req.SourceFormat, slot))
 		}
-		defer func() {
-			// A panic or a later admission refusal must not leak the slot. Once
-			// admitted, request.complete owns the release path.
-			if slot.Acquired && !admitted {
-				a.store.ReleaseSlot(req.RequestID)
-			}
-		}()
 	}
 
 	// Reference price refresh may have taken time. Quota and Retry-After share the
@@ -219,11 +162,13 @@ func (a *App) interceptBeforeAuth(raw []byte) ([]byte, error) {
 	now := a.store.Now()
 	decision := a.store.Authorize(scope, now)
 	if !decision.Allowed {
+		if generate {
+			a.store.ReleaseSlot(req.RequestID)
+		}
 		a.store.ReportQuotaBlock(scope, endpoint, decision)
 		return OKEnvelope(quotaExhaustedResponse(req.SourceFormat, decision, now))
 	}
 
-	admitted = true
 	return OKEnvelope(RequestInterceptResponse{})
 }
 
@@ -263,14 +208,7 @@ func (a *App) completeRequest(raw []byte) ([]byte, error) {
 	if errUnmarshal := json.Unmarshal(raw, &completion); errUnmarshal != nil {
 		return nil, fmt.Errorf("Parse request completion event: %w", errUnmarshal)
 	}
-	func() {
-		a.admissionsMu.Lock()
-		defer a.admissionsMu.Unlock()
-		if admission := a.admissions[strings.TrimSpace(completion.RequestID)]; admission != nil {
-			admission.completed = true
-		}
-		a.store.ReleaseSlot(completion.RequestID)
-	}()
+	a.store.ReleaseSlot(completion.RequestID)
 	a.finishRouteLog(completion)
 	return OKEnvelope(struct{}{})
 }

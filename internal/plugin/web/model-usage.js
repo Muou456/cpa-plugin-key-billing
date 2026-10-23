@@ -42,8 +42,8 @@ function modelUsage(account, query) {
   state.task = guard(async () => {
     try {
       const path = "/usage/models?" + search;
-      const result = requireObject(account ? await accountAPI(path) : await plugin("GET", path), m("ui.model"));
-      state.models = requireArray(result.models, m("ui.model"));
+      const result = account ? await accountAPI(path) : await plugin("GET", path);
+      state.models = result.models;
     } catch (error) {
       if (error instanceof AuthError || error instanceof StaleRequestError) {
         cache.delete(search);

@@ -81,42 +81,9 @@ async function configuredCredentialRef(kind, parts, counters) {
 }
 
 function parseConfiguredAPIKeys(config) {
-  const keys = config?.["api-keys"];
-  if (keys === null) return [];
-  if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string")) throw new UIError(m("ui.invalid_cpa_api_key_list"));
-  return keys;
-}
-
-function configuredCredentialEntries(config, field) {
-  const entries = config[field] == null ? [] : requireArray(config[field], field);
-  const validateEntry = (entry) => {
-    requireObject(entry, field);
-    for (const key of ["api-key", "base-url", "proxy-url", "prefix", "name", "auth-index"])
-      if (entry[key] != null && typeof entry[key] !== "string") throw new UIError(m("ui.invalid_configuration_for_value", { v0: field }));
-    if (entry.priority != null && !Number.isFinite(entry.priority))
-      throw new UIError(m("ui.invalid_configuration_for_value", { v0: field }));
-    if (entry.disabled != null && typeof entry.disabled !== "boolean")
-      throw new UIError(m("ui.invalid_enabled_state_for_value", { v0: field }));
-    if (entry.weight != null && (typeof entry.weight !== "number" || !Number.isFinite(entry.weight)))
-      throw new UIError(m("ui.invalid_weight_for_value", { v0: field }));
-    if (
-      entry["excluded-models"] != null &&
-      (!Array.isArray(entry["excluded-models"]) || entry["excluded-models"].some((model) => typeof model !== "string"))
-    )
-      throw new UIError(m("ui.invalid_configuration_for_value", { v0: field }));
-    if (entry.headers != null) {
-      requireObject(entry.headers, field);
-      if (Object.values(entry.headers).some((value) => typeof value !== "string"))
-        throw new UIError(m("ui.invalid_header_configuration_for_value", { v0: field }));
-    }
-  };
-  for (const entry of entries) {
-    validateEntry(entry);
-    if (field === "openai-compatibility" && entry["api-key-entries"] != null) {
-      for (const key of requireArray(entry["api-key-entries"], field)) validateEntry(key);
-    }
-  }
-  return entries;
+  // CPA returns an empty object when configuration is unavailable; never sync it as an empty key list.
+  if (!Object.hasOwn(config, "api-keys")) throw new UIError(m("ui.invalid_cpa_api_key_list"));
+  return config["api-keys"] || [];
 }
 
 async function parseConfiguredCredentials(config) {
@@ -125,7 +92,7 @@ async function parseConfiguredCredentials(config) {
   const credentials = [];
 
   for (const [field, provider, kind, usesHeaders] of CONFIGURED_CREDENTIAL_FIELDS) {
-    for (const entry of configuredCredentialEntries(config, field)) {
+    for (const entry of config[field] || []) {
       const apiKey = (entry["api-key"] || "").trim();
       const baseURL = (entry["base-url"] || "").trim();
       if (!apiKey && !baseURL) continue;
@@ -140,7 +107,7 @@ async function parseConfiguredCredentials(config) {
     }
   }
 
-  for (const entry of configuredCredentialEntries(config, "openai-compatibility")) {
+  for (const entry of config["openai-compatibility"] || []) {
     // CPA does not create runtime credentials or consume IDs for disabled providers.
     if (entry.disabled === true) continue;
     const providerName = (entry.name || "").trim().toLowerCase() || "openai-compatibility";
@@ -243,8 +210,8 @@ const PROVIDER_LABELS = {
 };
 
 function credentialRoutingTag(credential) {
-  const priority = Number.isFinite(credential.priority) ? credential.priority : "—";
-  const weight = Number.isFinite(credential.weight) ? credential.weight : "—";
+  const priority = credential.priority ?? "—";
+  const weight = credential.weight ?? "—";
   return metricTag([["P", priority], ["W", weight]], m("ui.credential_routing", { priority, weight }));
 }
 
