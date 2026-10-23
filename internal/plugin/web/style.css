@@ -2023,7 +2023,9 @@ body:not(.embedded) #keys-import-labels { display: none; }
   box-shadow: 0 1px 0 var(--border-color);
 }
 .request-event-cell-line { display: flex; align-items: center; gap: 4px; min-height: 20px; white-space: nowrap; }
+.request-event-parent-icon { transform: translateY(-5px); }
 .request-event-detail { min-height: 20px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.request-event-session-id { min-width: 42ch; max-width: 48ch; }
 .column-settings-dialog { width: min(480px, calc(100vw - 32px)); }
 .column-settings { display: grid; gap: 6px; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .column-setting {

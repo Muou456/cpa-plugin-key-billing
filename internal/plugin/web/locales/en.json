@@ -420,6 +420,8 @@
   "ui.result": "Result",
   "ui.tps_latency": "TPS / latency",
   "ui.cost": "Cost",
+  "ui.session_id": "Session ID",
+  "ui.parent_session_id": "Parent session ID",
   "ui.plugin_log_list": "Plugin log list",
   "ui.no_matching_entries_in_loaded_logs": "No matching entries in loaded logs",
   "ui.no_plugin_logs": "No plugin logs",
@@ -721,13 +723,5 @@
   "ui.quota_used": "Used",
   "ui.quota_projected": "Projected",
   "ui.no_quota_windows_reported": "No requests reported a quota window in the last 30 days",
-  "ui.quota_reset_but_cooldown_clear_failed": "Upstream quota was reset, but the local routing cooldown could not be cleared. Clear it in CPA before retrying.",
-  "ui.execution_id": "Execution ID",
-  "ui.trace_id": "Trace ID",
-  "ui.session_id": "Session ID",
-  "ui.parent_session_id": "Parent session ID",
-  "ui.access_provider": "Access provider",
-  "ui.native_key": "Native API key",
-  "ui.upstream_origin": "Upstream origin",
-  "ui.credential_reference": "Credential reference"
+  "ui.quota_reset_but_cooldown_clear_failed": "Upstream quota was reset, but the local routing cooldown could not be cleared. Clear it in CPA before retrying."
 }

@@ -1055,7 +1055,6 @@ def event_sample(
         "source": source,
         "provider": provider,
         "executor_type": executor,
-        "execution": {"request_id": f"dummy-execution-{key_index}-{model}", "trace_id": "demo0001", "session_id": "dummy-session", "access_provider": "config-inline", "is_native_key": True},
         "reasoning_effort": effort,
         "service_tier": tier,
         "response_service_tier": response_tier,
@@ -1114,6 +1113,7 @@ EVENT_SAMPLES = SUCCESS_EVENT_SAMPLES * 2 + FAILURE_EVENT_SAMPLES + UNASSIGNED_E
 
 def make_request_events():
     entries = []
+    session_id = "codex:01a16989-602b-7f81-83a1-964cd3cce8d9"
     request_variants = [
         {"endpoint": "/v1/chat/completions", "transport": "http", "stream": True, "user_agent": "OpenAI/Python 2.8.1", "x_forwarded_for": "203.0.113.24"},
         {
@@ -1143,6 +1143,14 @@ def make_request_events():
             "preview": key["preview"],
             "label": key["label"],
             **{name: value for name, value in sample.items() if name != "key_index"},
+            "execution": {
+                "request_id": f"dummy-execution-{index + 1}",
+                "trace_id": "demo0001",
+                "session_id": session_id,
+                "parent_session_id": session_id if index % 2 else "",
+                "access_provider": "config-inline",
+                "is_native_key": True,
+            },
             **request_variants[index % len(request_variants)],
         })
     return entries

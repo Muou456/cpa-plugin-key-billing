@@ -45,8 +45,7 @@ const REQUEST_EVENT_COLUMNS = [
       el("div", {
         class: "request-event-cell-line mono",
         text:
-          entry.transport === "websocket" ? "WS" : entry.transport === "http" && entry.stream != null ? entry.stream ? "SSE" : "HTTP" : "—",
-        ...(entry.execution ? hoverTooltipProps(() => renderExecutionTooltip(entry.execution)) : {})
+          entry.transport === "websocket" ? "WS" : entry.transport === "http" && entry.stream != null ? entry.stream ? "SSE" : "HTTP" : "—"
       }),
       el("div", { class: "request-event-detail muted mono", text: entry.endpoint || "—" })
     ]
@@ -76,6 +75,7 @@ const REQUEST_EVENT_COLUMNS = [
     ]
   },
   { id: "cost", label: m("ui.cost"), class: "num", cell: requestEventCost },
+  { id: "session_id", label: m("ui.session_id"), class: "small", cell: requestEventSession },
   {
     id: "user_agent",
     label: "User-Agent",
@@ -130,16 +130,17 @@ function populateRequestEventFilters(filters, account) {
   populateSourceFilterSelect($(prefix + "-source"), filters);
 }
 
-// The saved order comes first; columns added since then follow in their default order.
-// An empty preference gives the default layout.
+// Keep the saved order, inserting new columns before their next default neighbor.
 function requestEventColumnLayout(account, preference = viewPreference(account ? "account" : "admin", REQUEST_EVENT_COLUMN_LAYOUT, {})) {
   const { order = [], hidden = [] } = preference;
-  const rank = (column) => {
-    const index = order.indexOf(column.id);
-    return index < 0 ? order.length + REQUEST_EVENT_COLUMNS.indexOf(column) : index;
-  };
-  return REQUEST_EVENT_COLUMNS.filter((column) => !account || !column.admin).sort((a, b) => rank(a) - rank(b))
-    .map((column) => ({ column, visible: !hidden.includes(column.id) }));
+  const columns = REQUEST_EVENT_COLUMNS.filter((column) => !account || !column.admin);
+  const ordered = [...new Set(order)].map((id) => columns.find((column) => column.id === id)).filter(Boolean);
+  for (const [index, column] of columns.entries()) {
+    if (ordered.includes(column)) continue;
+    const next = columns.slice(index + 1).find((candidate) => ordered.includes(candidate));
+    ordered.splice(next ? ordered.indexOf(next) : ordered.length, 0, column);
+  }
+  return ordered.map((column) => ({ column, visible: column.required || !hidden.includes(column.id) }));
 }
 
 function renderRequestEvents(account = false) {
@@ -206,26 +207,24 @@ function requestEventModel({ entry }) {
   return [el("div", { class: "request-event-cell-line mono" }, billingModel), note];
 }
 
-function renderExecutionTooltip(execution) {
-  const labels = {
-    request_id: "ui.execution_id",
-    trace_id: "ui.trace_id",
-    session_id: "ui.session_id",
-    parent_session_id: "ui.parent_session_id",
-    access_provider: "ui.access_provider",
-    is_native_key: "ui.native_key",
-    base_url: "ui.upstream_origin",
-    credential_ref: "ui.credential_reference"
-  };
-  const fields = Object.entries(labels).filter(([key]) => execution[key] != null && execution[key] !== "");
-  return fields.map(([key, label]) =>
+function requestEventSession({ entry }) {
+  const { session_id: sessionID, parent_session_id: parentSessionID } = entry.execution || {};
+  const identity = (value) =>
     el(
-      "div",
-      {},
-      el("div", { class: "hover-tooltip-heading", text: m(label) }),
-      el("div", { class: "hover-tooltip-body mono", text: String(execution[key]) })
-    )
-  );
+      "span",
+      { class: "request-event-detail request-event-session-id mono", "data-tip": value || null, "data-tip-overflow": "" },
+      value || "—"
+    );
+  return [
+    el("div", { class: "request-event-cell-line" }, identity(sessionID)),
+    parentSessionID &&
+      el(
+        "div",
+        { class: "request-event-cell-line muted" },
+        el("span", { role: "img", "aria-label": m("ui.parent_session_id") }, actionIcon("corner-left-up", "request-event-parent-icon")),
+        identity(parentSessionID)
+      )
+  ];
 }
 
 function failureTag(entry) {
