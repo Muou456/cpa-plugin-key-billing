@@ -1544,7 +1544,7 @@ dialog.drawer[open] { display: flex; flex-direction: column; }
 .switch-field { display: flex; align-items: center; gap: 8px; color: var(--text-primary); font-size: 13px; margin-top: 16px; }
 .switch-field input { width: auto; }
 .tier-fields { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color); }
-.price-footnote { margin: 12px 0 0; }
+.table-footnote { margin: 12px 0 0; }
 .price-unit { margin-left: 8px; color: var(--text-tertiary); font-size: 12px; font-weight: 400; }
 .selection-list, .routing-list {
   width: 100%;
