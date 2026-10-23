@@ -544,6 +544,7 @@ def auth_file_views(files, query, scope=""):
         view["weight"] = item.get("weight", 1)
         view["title"] = item.get("email") or item["name"].removesuffix(".json")
         view["usage"] = credential_usage(rows)
+        view["in_flight"] = 0 if item["disabled"] else (1 if scope else 3)
         if item["category"] in ("codex", "claude"):
             quota = auth_file_quota({"auth_index": [item["auth_index"]]})
             observed_at = iso(NOW - timedelta(minutes=6 + index))
@@ -1275,7 +1276,8 @@ def configured_provider_views(query, account_index=None):
                        if (not refs and not providers or item["ref"] in refs or ("ai-providers", item["provider"]) in providers)
                        and item["ref"] not in denied_refs and ("ai-providers", item["provider"]) not in denied_providers]
         entries = [row for row in entries if row["scope"] == LIVE_KEYS[account_index]["scope"]]
-    return [{**item, "usage": credential_usage([row for row in entries if row["auth_index"] == item["auth_index"]])
+    return [{**item, "in_flight": 0 if item["disabled"] else (1 if account_index is not None else 3),
+             "usage": credential_usage([row for row in entries if row["auth_index"] == item["auth_index"]])
              if item["auth_index"] else None} for item in credentials]
 
 

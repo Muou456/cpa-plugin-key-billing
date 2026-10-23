@@ -19,6 +19,10 @@ func TestAIProviderViewsScopeUsageAndRouting(t *testing.T) {
 	from := app.store.Now().Add(-time.Hour).Truncate(time.Second)
 	to := from.Add(2 * time.Minute)
 	refA, refB := billing.CredentialFingerprint("config-a"), billing.CredentialFingerprint("config-b")
+	for _, key := range []string{accountTestKeyA, accountTestKeyB} {
+		app.store.AcquireSlot(billing.CallerScope(key), key)
+		app.store.AssignSlotCredential(key, refA)
+	}
 	if _, err := app.store.SyncKeys([]string{accountTestKeyA, accountTestKeyB}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +55,7 @@ func TestAIProviderViewsScopeUsageAndRouting(t *testing.T) {
 	query := url.Values{"from": {from.Format(time.RFC3339Nano)}, "to": {to.Format(time.RFC3339Nano)}}
 	var admin aiProviderListResponse
 	callOK(t, app, http.MethodGet, routeAIProviders, query, nil, http.StatusOK, &admin)
-	if len(admin.Providers) != 2 || admin.Providers[1].Usage.Requests != 3 {
+	if len(admin.Providers) != 2 || admin.Providers[1].Usage.Requests != 3 || admin.Providers[0].InFlight != 0 || admin.Providers[1].InFlight != 2 {
 		t.Fatalf("admin providers = %+v", admin)
 	}
 	for _, rule := range []billing.RouteRule{
@@ -67,6 +71,9 @@ func TestAIProviderViewsScopeUsageAndRouting(t *testing.T) {
 			t.Fatalf("account providers: %s, %v", response.Body, err)
 		}
 		got := account.Providers[0]
+		if got.InFlight != 1 {
+			t.Fatalf("account in-flight requests = %d, want 1", got.InFlight)
+		}
 		if got.Ref != refA || got.Usage.Requests != 2 || got.Usage.Failed != 1 || got.Usage.InputTokens != 100 || got.Usage.OutputTokens != 20 || got.Usage.CacheReadTokens != 50 {
 			t.Fatalf("account usage = %+v", got.Usage)
 		}

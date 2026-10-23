@@ -199,6 +199,9 @@ func (a *App) interceptAfterAuth(raw []byte) ([]byte, error) {
 			}
 		}
 	}
+	if id := metadataString(req.Metadata, MetadataSelectedAuth); !response.Terminate && id != "" {
+		a.store.AssignSlotCredential(req.RequestID, billing.CredentialFingerprint(id))
+	}
 	a.observeRouteCredential(req, result, detail)
 	return OKEnvelope(response)
 }

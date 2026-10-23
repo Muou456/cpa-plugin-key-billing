@@ -64,6 +64,7 @@ type authFileView struct {
 	Unavailable        bool                         `json:"unavailable"`
 	Priority           int                          `json:"priority"`
 	Weight             *int64                       `json:"weight,omitempty"`
+	InFlight           int                          `json:"in_flight"`
 	QuotaSupported     bool                         `json:"quota_supported"`
 	QuotaReason        string                       `json:"quota_unavailable_reason,omitempty"`
 	QuotaReasonMessage messages.Message             `json:"quota_unavailable_message,omitzero"`
@@ -262,6 +263,7 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 			files = filtered
 		}
 	}
+	concurrency := a.store.CredentialConcurrency(access.usageScope())
 	views := make([]authFileView, 0, len(files))
 	for _, file := range files {
 		if strings.TrimSpace(file.AuthIndex) == "" || strings.EqualFold(strings.TrimSpace(file.AccountType), "api_key") {
@@ -272,6 +274,7 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 		views = append(views, authFileView{
 			AuthIndex: file.AuthIndex, Name: file.Name, Title: authFileTitle(file), Category: category,
 			Disabled: file.Disabled, Unavailable: file.Unavailable, Priority: file.Priority, Weight: a.authFileWeight(file),
+			InFlight:       concurrency[billing.CredentialFingerprint(file.ID)],
 			QuotaSupported: quotaSupported, QuotaReason: quotaReason, CacheRevision: authFileRevision(file),
 			QuotaReasonMessage: messages.Literal(quotaReason),
 		})

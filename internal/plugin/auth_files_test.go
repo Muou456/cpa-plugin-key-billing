@@ -128,6 +128,10 @@ func TestAccountAuthFilesRequireTrackedAPIKey(t *testing.T) {
 
 func TestAuthFilesStatisticsFollowTimeRangeAndAccountScope(t *testing.T) {
 	app := newAppWithPrice(t, true)
+	for _, key := range []string{accountTestKeyA, accountTestKeyB} {
+		app.store.AcquireSlot(billing.CallerScope(key), key)
+		app.store.AssignSlotCredential(key, billing.CredentialFingerprint("dummy-auth-file"))
+	}
 	from := app.store.Now().Add(-time.Hour).Truncate(time.Second)
 	to := from.Add(2 * time.Minute)
 	for _, sample := range []struct {
@@ -164,7 +168,7 @@ func TestAuthFilesStatisticsFollowTimeRangeAndAccountScope(t *testing.T) {
 		if method != hostAuthList {
 			t.Fatalf("unexpected host method: %s", method)
 		}
-		return json.RawMessage(`{"files":[{"auth_index":"dummy-auth","name":"dummy.json","type":"codex"}]}`), nil
+		return json.RawMessage(`{"files":[{"id":"dummy-auth-file","auth_index":"dummy-auth","name":"dummy.json","type":"codex"}]}`), nil
 	})
 	query := url.Values{"from": {from.Format(time.RFC3339Nano)}, "to": {to.Format(time.RFC3339Nano)}}
 	for _, tc := range []struct {
@@ -194,6 +198,13 @@ func TestAuthFilesStatisticsFollowTimeRangeAndAccountScope(t *testing.T) {
 				t.Fatalf("response=%s, want=%+v", response.Body, tc.want)
 			}
 			got := view.Files[0].Usage
+			wantInFlight := 2
+			if tc.key != "" {
+				wantInFlight = 1
+			}
+			if view.Files[0].InFlight != wantInFlight {
+				t.Fatalf("in-flight requests = %d, want %d", view.Files[0].InFlight, wantInFlight)
+			}
 			// Every request used gpt-5.5, so the breakdown of the same requests repeats the totals.
 			breakdown := url.Values{"auth_index": {view.Files[0].AuthIndex}, "from": tc.query["from"], "to": tc.query["to"]}
 			if tc.key != "" {

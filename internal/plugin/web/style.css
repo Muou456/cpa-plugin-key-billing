@@ -1356,19 +1356,20 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
   .credential-table .credential-row {
     display: grid;
     grid-auto-columns: minmax(0, 1fr);
-    grid-template-areas: "identity identity actions" "requests tokens cache" "quota quota quota";
+    grid-template-areas: "identity identity identity actions" "inflight requests tokens cache" "quota quota quota quota";
     gap: 16px;
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
   }
   .credential-table .credential-row:has(> .credential-plan-cell) {
-    grid-template-areas: "identity identity identity actions" "plan requests tokens cache" "quota quota quota quota";
+    grid-template-areas: "identity identity plan actions" "inflight requests tokens cache" "quota quota quota quota";
   }
   .credential-table .credential-row:last-child { border-bottom: none; }
   .credential-table td { display: block; min-width: 0; padding: 0; border: none; }
   .credential-identity-cell { grid-area: identity; }
   .credential-row:not(:has(> .credential-actions-cell)) > .credential-identity-cell { grid-column: 1 / -1; }
   .credential-plan-cell { grid-area: plan; }
+  .credential-inflight-cell { grid-area: inflight; }
   .credential-requests-cell { grid-area: requests; }
   .credential-tokens-cell { grid-area: tokens; }
   .credential-cache-cell { grid-area: cache; }
@@ -1387,16 +1388,16 @@ body.privacy-masked .mask-select:not(:has(option[value=""]:checked))::before {
 @container credential-table (max-width: 560px) {
   .credential-table .credential-row {
     grid-template-columns: minmax(0, 1fr) max-content;
-    grid-template-areas: "identity identity" "requests success" "tokens cache" "quota quota" "actions actions";
+    grid-template-areas: "identity identity" "inflight inflight" "requests success" "tokens cache" "quota quota" "actions actions";
     gap: 10px 14px;
     padding: 14px;
   }
   .credential-table .credential-row:has(> .credential-plan-cell) {
-    grid-template-areas: "identity identity" "plan expiry" "requests success" "tokens cache" "quota quota" "actions actions";
+    grid-template-areas: "identity identity" "plan expiry" "inflight inflight" "requests success" "tokens cache" "quota quota" "actions actions";
   }
   .credential-table .credential-row:not(:has(> .credential-actions-cell)),
   .credential-table .credential-row:has(> .credential-actions-cell.unavailable) {
-    grid-template-areas: "identity identity" "requests success" "tokens cache" "quota quota";
+    grid-template-areas: "identity identity" "inflight inflight" "requests success" "tokens cache" "quota quota";
   }
   .auth-quota-list { grid-template-columns: minmax(0, 1fr); }
   .credential-actions { --button-min-height: 30px; }

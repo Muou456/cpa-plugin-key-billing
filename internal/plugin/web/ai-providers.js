@@ -154,9 +154,7 @@ function renderAIProviders(account) {
   renderCollection(body, providers, {
     headers: [
       m("ui.ai_providers"),
-      m("ui.requests"),
-      m("ui.auth_total_tokens"),
-      m("ui.cache_rate"),
+      ...credentialMetricHeaders(),
       { label: m("ui.balance"), class: "credential-quota-column" },
       ...(!account ? [m("ui.actions")] : [])
     ],
@@ -206,7 +204,7 @@ function renderAIProviderRow(provider, account) {
         )
       )
     ),
-    renderCredentialUsage(provider.usage, modelUsageTooltip(account, provider.usage_query)),
+    renderCredentialMetrics(provider, modelUsageTooltip(account, provider.usage_query)),
     el("td", { class: "credential-quota-cell" }, renderAIBalance(provider, account)),
     !account &&
       el(

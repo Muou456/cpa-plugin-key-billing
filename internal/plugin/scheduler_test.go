@@ -167,6 +167,13 @@ func TestAfterAuthEnforcesCredentialRoutesAndRecordsResults(t *testing.T) {
 			if response.Terminate != rejected || rejected && response.StatusCode != 503 {
 				t.Fatalf("response=%+v want=%s", response, tc.want)
 			}
+			wantInFlight := 1
+			if rejected {
+				wantInFlight = 0
+			}
+			if active := app.store.CredentialConcurrency(scope)[ref(tc.id)]; active != wantInFlight {
+				t.Fatalf("credential in-flight requests = %d, want %d", active, wantInFlight)
+			}
 			if rejected {
 				code := "routing_credential_mismatch"
 				if tc.want == "unverified" {

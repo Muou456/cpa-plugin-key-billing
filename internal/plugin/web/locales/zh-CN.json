@@ -124,6 +124,8 @@
   "ui.browser_credential_storage_failed": "浏览器凭证存储失败",
   "ui.amount": "金额",
   "ui.requests": "请求",
+  "ui.in_flight_requests": "在途请求",
+  "ui.credential_in_flight_help": "本实例中已分配且未结束的生成请求，含重试等待，不受时间范围影响。",
   "ui.days": "天",
   "ui.hours": "小时",
   "ui.minutes": "分钟",

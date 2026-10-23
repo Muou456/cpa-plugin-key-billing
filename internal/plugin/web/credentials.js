@@ -142,15 +142,19 @@ function providerIcon(brand) {
 }
 
 function credentialUsageSummary(usage) {
-  const count = usage.requests || 0;
-  const failed = usage.failed || 0;
+  const count = usage.requests;
+  const failed = usage.failed;
   return {
     count,
     failed,
     success: count ? (((count - failed) / count) * 100).toFixed(2) + "%" : "—",
-    total: (usage.input_tokens || 0) + (usage.output_tokens || 0),
+    total: usage.input_tokens + usage.output_tokens,
     cache: usage.input_tokens ? ((usage.cache_read_tokens / usage.input_tokens) * 100).toFixed(2) + "%" : "—"
   };
+}
+
+function credentialMetricHeaders() {
+  return ["ui.in_flight_requests", "ui.requests", "ui.auth_total_tokens", "ui.cache_rate"].map((key) => m(key));
 }
 
 function credentialMetric(name, label, value, secondary) {
@@ -175,8 +179,17 @@ function credentialMetric(name, label, value, secondary) {
   );
 }
 
-// The request, token and cache cells of a credential's row. Usage is recorded by auth index,
-// so a credential without one has no usage to show. Its tokens break down by model.
+function renderCredentialMetrics({ usage, in_flight: inFlight }, breakdown) {
+  return [
+    credentialMetric(
+      "inflight",
+      m("ui.in_flight_requests"),
+      el("span", { "data-tip": m("ui.credential_in_flight_help"), tabindex: "0", text: int(inFlight) })
+    ),
+    ...renderCredentialUsage(usage, breakdown)
+  ];
+}
+
 function renderCredentialUsage(usage, breakdown) {
   if (!usage) {
     return [

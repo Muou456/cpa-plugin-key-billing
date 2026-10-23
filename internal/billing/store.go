@@ -26,10 +26,8 @@ type Store struct {
 	path  string
 	dirty Changes
 
-	// activeRequests and activeByScope are the process-local concurrency slots.
-	// Only the configured limit is persisted: active requests end with this host
-	// process and are correlated exactly by the host-provided request ID.
-	activeRequests map[string]string
+	// Process-local slots keyed by CPA's execution ID; only limits are persisted.
+	activeRequests map[string]concurrencySlot
 	activeByScope  map[string]int
 
 	// blocked remembers which keys have already had their exhausted quota
@@ -56,7 +54,7 @@ func NewStore(open func(string) (Repository, error), downloadReferencePrices fun
 	return &Store{
 		state:                   NewState(),
 		cfg:                     DefaultConfig(),
-		activeRequests:          make(map[string]string),
+		activeRequests:          make(map[string]concurrencySlot),
 		activeByScope:           make(map[string]int),
 		open:                    open,
 		downloadReferencePrices: downloadReferencePrices,
@@ -143,7 +141,7 @@ func (s *Store) Close() {
 	s.repo = nil
 	s.path = ""
 	s.dirty = Changes{}
-	s.activeRequests = make(map[string]string)
+	s.activeRequests = make(map[string]concurrencySlot)
 	s.activeByScope = make(map[string]int)
 	s.mu.Unlock()
 	previousReferences.close()

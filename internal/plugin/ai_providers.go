@@ -12,7 +12,8 @@ import (
 type aiProviderView struct {
 	Ref string `json:"ref"`
 	billing.ConfigCredential
-	Usage *billing.CredentialUsageStats `json:"usage"`
+	InFlight int                           `json:"in_flight"`
+	Usage    *billing.CredentialUsageStats `json:"usage"`
 }
 
 type aiProviderListResponse struct {
@@ -42,8 +43,9 @@ func (a *App) aiProviders(req ManagementRequest, access viewAccess) ManagementRe
 	}
 	providers := make([]aiProviderView, 0)
 	indexes := make([]string, 0)
+	concurrency := a.store.CredentialConcurrency(access.usageScope())
 	for ref, credential := range a.visibleConfigCredentials(access) {
-		providers = append(providers, aiProviderView{Ref: ref, ConfigCredential: credential})
+		providers = append(providers, aiProviderView{Ref: ref, ConfigCredential: credential, InFlight: concurrency[ref]})
 		if credential.AuthIndex != "" {
 			indexes = append(indexes, credential.AuthIndex)
 		}

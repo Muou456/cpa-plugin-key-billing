@@ -384,9 +384,7 @@ function renderAuthFiles(account) {
     headers: [
       m("ui.auth_files"),
       m("ui.plan"),
-      m("ui.requests"),
-      m("ui.auth_total_tokens"),
-      m("ui.cache_rate"),
+      ...credentialMetricHeaders(),
       { label: m("ui.quota"), class: "credential-quota-column" },
       m("ui.actions")
     ],
@@ -452,7 +450,7 @@ function renderAuthFileRow(file, account) {
       )
     ),
     renderAuthFilePlan(file, quota),
-    renderCredentialUsage(file.usage, modelUsageTooltip(account, file.usage_query)),
+    renderCredentialMetrics(file, modelUsageTooltip(account, file.usage_query)),
     el(
       "td",
       { class: "credential-quota-cell" },
