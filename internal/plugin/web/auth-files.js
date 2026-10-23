@@ -123,14 +123,13 @@ function restoreAuthQuotaCache(account) {
   }
 }
 
-// CPA's own list has what host callbacks omit: routing weights and the subscription end in a Codex ID token.
-async function readCPAAuthFiles() {
+async function readCPAAuthSubscriptions() {
   try {
     const result = await api("GET", "/v0/management/auth-files", null, { keepSessionOnForbidden: true });
     return new Map(
       requireArray(result?.files, m("ui.auth_files")).map((file) => [
         file.auth_index,
-        { weight: file.weight ?? 1, subscription_until: Date.parse(file.id_token?.chatgpt_subscription_active_until) }
+        Date.parse(file.id_token?.chatgpt_subscription_active_until)
       ])
     );
   } catch (err) {
@@ -146,11 +145,14 @@ function readAuthFiles(account, reload = false) {
     async () => {
       const range = selectedRange(account);
       const path = "/auth-files?" + new URLSearchParams(range);
-      const [result, details] = await Promise.all([account ? accountAPI(path) : plugin("GET", path), account ? null : readCPAAuthFiles()]);
+      const [result, subscriptions] = await Promise.all([
+        account ? accountAPI(path) : plugin("GET", path),
+        account ? null : readCPAAuthSubscriptions()
+      ]);
       // A breakdown selects the same requests as its total.
       return requireArray(result?.files, m("ui.auth_files")).map((file) => ({
         ...file,
-        ...details?.get(file.auth_index),
+        subscription_until: subscriptions?.get(file.auth_index),
         usage_query: { auth_index: file.auth_index, ...range }
       }));
     },

@@ -63,6 +63,7 @@ type authFileView struct {
 	Disabled           bool                         `json:"disabled"`
 	Unavailable        bool                         `json:"unavailable"`
 	Priority           int                          `json:"priority"`
+	Weight             *int64                       `json:"weight,omitempty"`
 	QuotaSupported     bool                         `json:"quota_supported"`
 	QuotaReason        string                       `json:"quota_unavailable_reason,omitempty"`
 	QuotaReasonMessage messages.Message             `json:"quota_unavailable_message,omitzero"`
@@ -270,7 +271,7 @@ func (a *App) listAuthFiles(access viewAccess, from, to time.Time) ([]authFileVi
 		quotaSupported, quotaReason := authQuotaAvailability(file, category)
 		views = append(views, authFileView{
 			AuthIndex: file.AuthIndex, Name: file.Name, Title: authFileTitle(file), Category: category,
-			Disabled: file.Disabled, Unavailable: file.Unavailable, Priority: file.Priority,
+			Disabled: file.Disabled, Unavailable: file.Unavailable, Priority: file.Priority, Weight: a.authFileWeight(file),
 			QuotaSupported: quotaSupported, QuotaReason: quotaReason, CacheRevision: authFileRevision(file),
 			QuotaReasonMessage: messages.Literal(quotaReason),
 		})
@@ -383,6 +384,46 @@ func (a *App) listHostAuthFiles() ([]hostAuthFile, error) {
 		return nil, messages.Errorf("Parse auth file list: %w", errDecode)
 	}
 	return response.Files, nil
+}
+
+func (a *App) readHostAuthFile(authIndex string) (map[string]any, error) {
+	raw, err := a.hostCaller(hostAuthGet, map[string]string{"auth_index": authIndex})
+	if err != nil {
+		return nil, messages.Errorf("Read auth file: %w", err)
+	}
+	var response struct {
+		JSON json.RawMessage `json:"json"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, messages.Errorf("Parse auth file: %w", err)
+	}
+	var metadata map[string]any
+	if json.Unmarshal(response.JSON, &metadata) != nil {
+		return nil, messages.Errorf("Invalid auth file contents")
+	}
+	return metadata, nil
+}
+
+func (a *App) authFileWeight(file hostAuthFile) *int64 {
+	if file.RuntimeOnly || strings.TrimSpace(file.Path) == "" {
+		return nil
+	}
+	// The list callback omits weight; a failed file read must remain unknown.
+	metadata, err := a.readHostAuthFile(file.AuthIndex)
+	if err != nil {
+		return nil
+	}
+	weight := int64(1)
+	switch value := metadata["weight"].(type) {
+	case float64:
+		weight = int64(value)
+	case string:
+		if value = strings.TrimSpace(value); value != "" {
+			weight, _ = strconv.ParseInt(value, 10, 64)
+		}
+	}
+	weight = max(0, weight)
+	return &weight
 }
 
 // Auth files are titled the way CPAMC titles them: email, then project ID, then

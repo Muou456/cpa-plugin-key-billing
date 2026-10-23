@@ -529,7 +529,8 @@ def auth_file_views(files, query, scope=""):
     views = []
     for index, item in enumerate(files):
         rows = [entry for entry in entries if entry["auth_index"] == item["auth_index"]]
-        view = {field: value for field, value in item.items() if field not in ("weight", "id_token", "email")}
+        view = {field: value for field, value in item.items() if field not in ("id_token", "email")}
+        view["weight"] = item.get("weight", 1)
         view["title"] = item.get("email") or item["name"].removesuffix(".json")
         view["usage"] = credential_usage(rows)
         if item["category"] in ("codex", "claude"):

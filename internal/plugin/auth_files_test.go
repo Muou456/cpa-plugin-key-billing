@@ -19,7 +19,17 @@ import (
 
 func TestAuthFilesExposeOnlyDisplayFieldsInCategoryOrder(t *testing.T) {
 	app := newConfiguredApp(t)
-	app.SetHostCaller(func(method string, _ any) (json.RawMessage, error) {
+	app.SetHostCaller(func(method string, payload any) (json.RawMessage, error) {
+		if method == hostAuthGet {
+			switch payload.(map[string]string)["auth_index"] {
+			case "a-1":
+				return json.RawMessage(`{"json":{"weight":0}}`), nil
+			case "c-1":
+				return json.RawMessage(`{"json":{"weight":"10"}}`), nil
+			default:
+				return json.RawMessage(`{"json":{"access_token":"dummy-secret"}}`), nil
+			}
+		}
 		if method != hostAuthList {
 			t.Fatalf("host method = %q, want %q", method, hostAuthList)
 		}
@@ -27,10 +37,10 @@ func TestAuthFilesExposeOnlyDisplayFieldsInCategoryOrder(t *testing.T) {
 			{"name":"disk-only.json","type":"codex"},
 			{"auth_index":"api-1","name":"openai-api-key.json","type":"openai","provider":"openai","account_type":"api_key","account":"sk-upstream-secret"},
 			{"auth_index":"x-2","name":"zeta.json","type":"xai","email":"z@example.com","disabled":true,"path":"/secret/zeta.json","account":"sk-upstream-secret","id_token":"secret"},
-			{"auth_index":"c-2","name":"zeta.json","type":"codex","id_token":{"plan_type":"pro"}},
-			{"auth_index":"c-1","name":"Alpha.json","type":"codex","email":"user@example.com","priority":99,"modtime":"2026-09-02T01:02:03Z","id_token":{"planType":"prolite"}},
-			{"auth_index":"a-1","name":"antigravity.json","type":"antigravity"},
-			{"auth_index":"cl-1","name":"claude.json","type":"claude"}
+			{"auth_index":"c-2","name":"zeta.json","type":"codex","path":"/dummy/c-2.json","id_token":{"plan_type":"pro"}},
+			{"auth_index":"c-1","name":"Alpha.json","type":"codex","path":"/dummy/c-1.json","email":"user@example.com","priority":99,"modtime":"2026-09-02T01:02:03Z","id_token":{"planType":"prolite"}},
+			{"auth_index":"a-1","name":"antigravity.json","type":"antigravity","path":"/dummy/a-1.json"},
+			{"auth_index":"cl-1","name":"claude.json","type":"claude","path":"/dummy/cl-1.json"}
 		]}`), nil
 	})
 	response := app.authFiles(ManagementRequest{}, viewAccess{})
@@ -60,13 +70,18 @@ func TestAuthFilesExposeOnlyDisplayFieldsInCategoryOrder(t *testing.T) {
 	if payload.Files[2].Priority != 99 || !strings.Contains(encoded, `"priority":0`) {
 		t.Fatalf("priorities = %d, body = %s", payload.Files[2].Priority, encoded)
 	}
+	for i, want := range []int64{1, 0, 10, 1, 1} {
+		if weight := payload.Files[i].Weight; weight == nil || *weight != want {
+			t.Fatalf("weight[%d] in %s, want %d", i, encoded, want)
+		}
+	}
 	if payload.Files[4].QuotaSupported || payload.Files[4].QuotaReason != "Auth file is disabled" {
 		t.Fatalf("disabled quota availability = %+v", payload.Files[4])
 	}
 	if payload.Files[4].QuotaReasonMessage.Key == "" {
 		t.Fatal("missing translated quota availability")
 	}
-	for _, forbidden := range []string{"disk-only", "openai-api-key", "sk-upstream-secret", "/secret/zeta.json", "id_token", "secret", `"account"`, `"path"`} {
+	for _, forbidden := range []string{"disk-only", "openai-api-key", "sk-upstream-secret", "/secret/zeta.json", "id_token", "access_token", "secret", `"account"`, `"path"`} {
 		if strings.Contains(encoded, forbidden) {
 			t.Fatalf("response leaked %q: %s", forbidden, encoded)
 		}
@@ -238,7 +253,7 @@ func TestAccountAuthFilesFollowCredentialRouting(t *testing.T) {
 				t.Fatal(errRoute)
 			}
 			hostGetCalls := 0
-			app.SetHostCaller(func(method string, _ any) (json.RawMessage, error) {
+			app.SetHostCaller(func(method string, payload any) (json.RawMessage, error) {
 				switch method {
 				case hostAuthList:
 					return json.RawMessage(`{"files":[
@@ -249,14 +264,22 @@ func TestAccountAuthFilesFollowCredentialRouting(t *testing.T) {
 			]}`), nil
 				case hostAuthGet:
 					hostGetCalls++
-					return nil, nil
+					switch payload.(map[string]string)["auth_index"] {
+					case "codex-allowed":
+						return json.RawMessage(`{"json":{"weight":-2}}`), nil
+					case "claude-allowed":
+						return json.RawMessage(`{"json":{"weight":10}}`), nil
+					default:
+						t.Fatalf("read a credential outside the route: %v", payload)
+						return nil, nil
+					}
 				default:
 					t.Fatalf("unexpected host method %q", method)
 					return nil, nil
 				}
 			})
 			access := viewAccess{APIKey: true, Scope: scope, Tracked: true}
-			response := app.authFiles(ManagementRequest{}, access)
+			response := callAccount(t, app, routeAuthFiles, accountTestKeyA, nil)
 			if response.StatusCode != http.StatusOK {
 				t.Fatalf("status = %d, body = %s", response.StatusCode, response.Body)
 			}
@@ -272,6 +295,11 @@ func TestAccountAuthFilesFollowCredentialRouting(t *testing.T) {
 			if strings.Join(got, "|") != strings.Join(want, "|") {
 				t.Fatalf("auth files = %v, want %v", got, want)
 			}
+			if hostGetCalls != 2 || payload.Files[0].Weight == nil || *payload.Files[0].Weight != 10 ||
+				payload.Files[1].Weight == nil || *payload.Files[1].Weight != 0 {
+				t.Fatalf("weight reads=%d, body=%s", hostGetCalls, response.Body)
+			}
+			hostGetCalls = 0
 
 			request := ManagementRequest{Query: url.Values{"auth_index": {"codex-denied"}}}
 			if response := app.authQuota(request, access); response.StatusCode != http.StatusNotFound {

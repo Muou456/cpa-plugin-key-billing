@@ -15,10 +15,6 @@ import (
 
 const hostHTTPDo = "host.http.do"
 
-type hostAuthGetResponse struct {
-	JSON json.RawMessage `json:"json"`
-}
-
 type hostHTTPRequest struct {
 	HostCallbackID string      `json:"host_callback_id,omitempty"`
 	Method         string      `json:"method"`
@@ -33,17 +29,9 @@ type hostHTTPResponse struct {
 }
 
 func (a *App) openAuthQuotaClient(callbackID string, file hostAuthFile) (*authQuotaClient, error) {
-	raw, errGet := a.hostCaller(hostAuthGet, map[string]string{"auth_index": file.AuthIndex})
-	if errGet != nil {
-		return nil, messages.Errorf("Read auth file: %w", errGet)
-	}
-	var auth hostAuthGetResponse
-	if errDecode := json.Unmarshal(raw, &auth); errDecode != nil {
-		return nil, messages.Errorf("Parse auth file: %w", errDecode)
-	}
-	var credential map[string]any
-	if errDecode := json.Unmarshal(auth.JSON, &credential); errDecode != nil {
-		return nil, messages.Errorf("Invalid auth file contents")
+	credential, err := a.readHostAuthFile(file.AuthIndex)
+	if err != nil {
+		return nil, err
 	}
 	return newAuthQuotaClient(a.hostCaller, callbackID, credential)
 }
