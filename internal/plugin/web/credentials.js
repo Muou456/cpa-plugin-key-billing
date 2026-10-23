@@ -180,14 +180,7 @@ function credentialMetric(name, label, value, secondary) {
 }
 
 function renderCredentialMetrics({ usage, in_flight: inFlight }, breakdown) {
-  return [
-    credentialMetric(
-      "inflight",
-      m("ui.in_flight_requests"),
-      el("span", { "data-tip": m("ui.credential_in_flight_help"), tabindex: "0", text: int(inFlight) })
-    ),
-    ...renderCredentialUsage(usage, breakdown)
-  ];
+  return [credentialMetric("inflight", m("ui.in_flight_requests"), int(inFlight)), ...renderCredentialUsage(usage, breakdown)];
 }
 
 function renderCredentialUsage(usage, breakdown) {

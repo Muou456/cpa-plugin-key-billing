@@ -125,7 +125,6 @@
   "ui.amount": "Amount",
   "ui.requests": "Requests",
   "ui.in_flight_requests": "In-flight requests",
-  "ui.credential_in_flight_help": "Assigned generation requests still in progress on this instance, including retry waits. Independent of the selected time range.",
   "ui.days": "days",
   "ui.hours": "hours",
   "ui.minutes": "minutes",
