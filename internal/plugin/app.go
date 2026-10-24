@@ -169,6 +169,12 @@ func (a *App) registration() Registration {
 					Description: "Mask email addresses in API key account responses",
 				},
 				{
+					Name:        "hide_api_key_view_credentials",
+					Default:     defaults.HideAPIKeyViewCredentials,
+					Type:        "boolean",
+					Description: "Hide credential access, auth files, AI providers, and request sources from API key users",
+				},
+				{
 					Name:        "allow_api_key_quota_reset",
 					Default:     defaults.AllowAPIKeyQuotaReset,
 					Type:        "boolean",

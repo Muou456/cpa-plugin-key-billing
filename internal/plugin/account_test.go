@@ -292,6 +292,79 @@ func TestAccountRequestEventsUseTheAdministratorSource(t *testing.T) {
 	}
 }
 
+func TestAccountHidesCredentialsAndSources(t *testing.T) {
+	app, path := newAppWithPriceAndState(t, true)
+	raw, errHandle := app.HandleMethod(MethodPluginReconfigure, mustMarshal(t, LifecycleRequest{ConfigYAML: []byte(
+		"enabled: true\nhide_api_key_view_credentials: true\nallow_api_key_quota_reset: true\nstate_file: \"" + path + "\"\n",
+	)}))
+	if errHandle != nil {
+		t.Fatal(errHandle)
+	}
+	decodeResult(t, raw, nil)
+	if _, errSync := app.store.SyncKeys([]string{accountTestKeyA}, false); errSync != nil {
+		t.Fatal(errSync)
+	}
+	billOneRequest(t, app, accountTestKeyA, 20)
+	publishUsageRecord(t, app, UsageRecord{
+		Provider: "codex", Model: "gpt-5.5", Alias: "gpt-5.5", APIKey: accountTestKeyA, Source: "owner@example.com",
+		Generate: true, Failed: true, Failure: UsageFailure{StatusCode: 502, Body: `{"error":{"message":"bad gateway"}}`},
+	})
+
+	var profile accountProfileResponse
+	if err := json.Unmarshal(callAccount(t, app, routeProfile, accountTestKeyA, nil).Body, &profile); err != nil ||
+		!profile.HideCredentials || profile.CanResetAuthQuota {
+		t.Fatalf("profile = %+v, err = %v", profile, err)
+	}
+	var events billing.RequestEventView
+	if err := json.Unmarshal(callAccount(t, app, routeEvents, accountTestKeyA, nil).Body, &events); err != nil ||
+		len(events.Entries) != 2 || events.Filters == nil || len(events.Filters.SourceOptions) != 0 {
+		t.Fatalf("events = %+v, err = %v", events, err)
+	}
+	for _, entry := range events.Entries {
+		if entry.Source != "" || entry.Account != "" {
+			t.Fatalf("event source leaked: %+v", entry)
+		}
+	}
+	var errors billing.RequestErrorView
+	if err := json.Unmarshal(callAccount(t, app, routeErrors, accountTestKeyA, nil).Body, &errors); err != nil ||
+		len(errors.Entries) != 1 || errors.Entries[0].Source != "" || len(errors.Filters.SourceOptions) != 0 {
+		t.Fatalf("errors = %+v, err = %v", errors, err)
+	}
+	var analysis billing.AnalysisView
+	if err := json.Unmarshal(callAccount(t, app, routeAnalysis, accountTestKeyA, nil).Body, &analysis); err != nil ||
+		len(analysis.UsageDistribution.Sources) != 0 || len(analysis.UsageDistribution.Models) == 0 {
+		t.Fatalf("analysis = %+v, err = %v", analysis.UsageDistribution, err)
+	}
+	var routing accountRoutingResponse
+	if err := json.Unmarshal(callAccount(t, app, routeRouting, accountTestKeyA, nil).Body, &routing); err != nil ||
+		len(routing.Credentials) != 0 || len(routing.DeniedCredentials) != 0 {
+		t.Fatalf("routing = %+v, err = %v", routing, err)
+	}
+
+	token := sourceFilterToken(billing.CallerScope(accountTestKeyA), "openai")
+	for _, request := range []struct {
+		route  string
+		query  url.Values
+		status int
+	}{
+		{routeEvents, url.Values{"source": {token}}, http.StatusBadRequest},
+		{routeErrors, url.Values{"source": {token}}, http.StatusBadRequest},
+		{routeUsageModels, url.Values{"dimension": {"sources"}, "value": {token}}, http.StatusNotFound},
+		{routeUsageModels, url.Values{"auth_index": {"1"}}, http.StatusNotFound},
+		{routeAuthFiles, nil, http.StatusNotFound},
+		{routeAuthQuota, nil, http.StatusNotFound},
+		{routeAuthFileHistory, nil, http.StatusNotFound},
+		{routeAIProviders, nil, http.StatusNotFound},
+	} {
+		if response := callAccount(t, app, request.route, accountTestKeyA, request.query); response.StatusCode != request.status {
+			t.Fatalf("%s %v status = %d, want %d: %s", request.route, request.query, response.StatusCode, request.status, response.Body)
+		}
+	}
+	if response := callAccount(t, app, routeUsageModels, accountTestKeyA, url.Values{"dimension": {"models"}, "value": {"gpt-5.5"}}); response.StatusCode != http.StatusOK {
+		t.Fatalf("model usage = %+v", response)
+	}
+}
+
 func TestAccountEmailMasking(t *testing.T) {
 	app, path := newAppWithPriceAndState(t, true)
 	raw, errHandle := app.HandleMethod(MethodPluginReconfigure, mustMarshal(t, LifecycleRequest{ConfigYAML: []byte(

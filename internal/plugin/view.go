@@ -58,8 +58,13 @@ type viewAccess struct {
 	Scope      string
 	Tracked    bool
 	MaskEmails bool
-	Key        billing.KeyView
+	// HideCredentials withholds upstream credentials and request sources from API key users.
+	HideCredentials bool
+	Key             billing.KeyView
 }
+
+// credentialResources are the API key routes that only describe upstream credentials.
+var credentialResources = []string{routeAuthFiles, routeAuthQuota, routeAuthQuotaReset, routeAuthFileHistory, routeAIProviders}
 
 // usageScope limits usage statistics to the presenting API key.
 func (access viewAccess) usageScope() string {
@@ -75,7 +80,10 @@ func (a *App) apiKeyViewAccess(req ManagementRequest) (viewAccess, bool) {
 		return viewAccess{}, false
 	}
 	view, tracked := a.store.KeyViewForScope(scope)
-	return viewAccess{APIKey: true, Scope: scope, Tracked: tracked, MaskEmails: a.store.MaskAPIKeyViewEmails(), Key: view}, true
+	return viewAccess{
+		APIKey: true, Scope: scope, Tracked: tracked, MaskEmails: a.store.MaskAPIKeyViewEmails(),
+		HideCredentials: a.store.HideAPIKeyViewCredentials(), Key: view,
+	}, true
 }
 
 func (a *App) routeResource(req ManagementRequest, suffix string) ManagementResponse {
@@ -95,6 +103,9 @@ func (a *App) routeResource(req ManagementRequest, suffix string) ManagementResp
 	access, ok := a.apiKeyViewAccess(req)
 	if !ok {
 		return apiKeyUnauthorized()
+	}
+	if access.HideCredentials && slices.Contains(credentialResources, suffix) {
+		return viewJSONError(access, http.StatusNotFound, "not_found", "Resource route not found: "+req.Method+" "+req.Path)
 	}
 	return handler(a, req, access)
 }
@@ -122,6 +133,9 @@ func (a *App) listRequestEvents(req ManagementRequest, access viewAccess) Manage
 	}
 	if errQuery := requestPageParams(req.Query, &query.Offset, &query.Limit, &query.From, &query.To, &query.SnapshotID); errQuery != nil {
 		return viewErrorResponse(access, errQuery)
+	}
+	if access.HideCredentials && query.Source != "" {
+		return viewJSONError(access, http.StatusBadRequest, "invalid_filter", "Invalid source filter; refresh the page")
 	}
 	if query.Source != "" {
 		if !validSourceFilterToken(query.Source) {
@@ -159,9 +173,15 @@ func (a *App) listRequestEvents(req ManagementRequest, access viewAccess) Manage
 			}
 			view.Entries[i].Preview = ""
 			view.Entries[i].Label = ""
+			if access.HideCredentials {
+				view.Entries[i].Source, view.Entries[i].Account = "", ""
+			}
 		}
 	}
 	if view.Filters != nil {
+		if access.HideCredentials {
+			view.Filters.Sources = nil
+		}
 		view.Filters.SourceOptions = sourceFilterOptions(access.Scope, view.Filters.Sources)
 	}
 	return viewJSON(access, http.StatusOK, view)
@@ -190,6 +210,9 @@ func (a *App) listRequestErrors(req ManagementRequest, access viewAccess) Manage
 	}
 	if err := requestPageParams(req.Query, &query.Offset, &query.Limit, &query.From, &query.To, &query.SnapshotID); err != nil {
 		return viewErrorResponse(access, err)
+	}
+	if access.HideCredentials && query.Source != "" {
+		return viewJSONError(access, http.StatusBadRequest, "invalid_filter", "Invalid source filter; refresh the page")
 	}
 	if query.Source != "" {
 		if !validSourceFilterToken(query.Source) {
@@ -220,9 +243,15 @@ func (a *App) listRequestErrors(req ManagementRequest, access viewAccess) Manage
 		for i := range view.Entries {
 			view.Entries[i].Scope, view.Entries[i].AuthIndex = "", ""
 			view.Entries[i].Preview, view.Entries[i].Label = "", ""
+			if access.HideCredentials {
+				view.Entries[i].Source = ""
+			}
 		}
 	}
 	if view.Filters != nil {
+		if access.HideCredentials {
+			view.Filters.Sources = nil
+		}
 		view.Filters.SourceOptions = sourceFilterOptions(access.Scope, view.Filters.Sources)
 	}
 	return viewJSON(access, http.StatusOK, view)
@@ -246,6 +275,9 @@ func (a *App) analysis(req ManagementRequest, access viewAccess) ManagementRespo
 	}
 	if access.APIKey || query.KeyScope != "" || query.KeyScopeEmpty {
 		view.UsageDistribution.APIKeys = []billing.AnalysisComposition{}
+	}
+	if access.HideCredentials {
+		view.UsageDistribution.Sources = []billing.AnalysisComposition{}
 	}
 	for i := range view.UsageDistribution.Sources {
 		view.UsageDistribution.Sources[i].Filter = sourceFilterToken(access.Scope, view.UsageDistribution.Sources[i].Key)
@@ -278,6 +310,10 @@ func (a *App) analysisSpeed(req ManagementRequest, access viewAccess) Management
 func (a *App) usageModels(req ManagementRequest, access viewAccess) ManagementResponse {
 	if access.APIKey && !access.Tracked {
 		return apiKeyUnauthorized()
+	}
+	if access.HideCredentials && (req.Query.Has("credential_ref") || req.Query.Has("auth_index") || req.Query.Has("provider") ||
+		req.Query.Get("dimension") == "sources") {
+		return viewJSONError(access, http.StatusNotFound, "not_found", "Configured credential does not exist")
 	}
 	query := billing.UsageQuery{AuthIndex: strings.TrimSpace(req.Query.Get("auth_index")), Provider: strings.TrimSpace(req.Query.Get("provider")),
 		ModelMatch: billing.ModelMatch{Include: req.Query["include"], Exclude: req.Query["exclude"]}}

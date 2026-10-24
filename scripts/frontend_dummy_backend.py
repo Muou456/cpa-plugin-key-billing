@@ -1819,10 +1819,29 @@ def payload_for(path, query):
     return None
 
 
+def hide_credential_fields(payload, hide):
+    """Mirrors hide_api_key_view_credentials: API key views omit credentials and request sources."""
+    if not hide:
+        return payload
+    # Views may share rows with the dummy history; never edit them in place.
+    payload = json.loads(json.dumps(payload))
+    for entry in payload.get("entries", []):
+        entry.pop("source", None)
+        entry.pop("account", None)
+    if payload.get("filter_options"):
+        payload["filter_options"]["source_options"] = []
+    if "usage_distribution" in payload:
+        payload["usage_distribution"]["sources"] = []
+    if "credentials" in payload:
+        payload["credentials"], payload["denied_credentials"] = [], []
+    return payload
+
+
 class Handler(BaseHTTPRequestHandler):
     host_mode = "standalone"
     initial_theme = "auto"
     allow_api_key_quota_reset = False
+    hide_api_key_view_credentials = False
 
     def send_response(self, code, message=None):
         time.sleep(random.uniform(0.4, 0.6))
@@ -1925,24 +1944,28 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(401, {"error": {"message": "API Key 无效"}})
                 return
             index = api_keys.index(authorization[7:])
-            if parsed.path.endswith("/profile"):
+            hide = self.hide_api_key_view_credentials
+            if hide and (parsed.path.startswith(f"{RESOURCE_BASE}/auth-files") or parsed.path.endswith("/ai-providers")):
+                self.send_json(404, {"error": {"message": "Resource route not found"}})
+            elif parsed.path.endswith("/profile"):
                 key = LIVE_KEYS[index]
                 self.send_json(200, {"tracked": True, "identity": {"preview": key["preview"], "label": key["label"]},
-                                     "can_reset_auth_quota": self.allow_api_key_quota_reset})
+                                     "can_reset_auth_quota": self.allow_api_key_quota_reset and not hide,
+                                     "hide_credentials": hide})
             elif parsed.path.endswith("/subscription"):
                 key = LIVE_KEYS[index]
                 refresh_key_quota(key)
                 self.send_json(200, {"subscription": {"name": key["plan_name"], "unlimited": key["unlimited"], "blocked": key["blocked"], "windows": key["windows"], "retry_at": key.get("retry_at")}, "concurrency": {"limit": key["concurrency_limit"], "current": key["current_concurrency"]}})
             elif parsed.path.endswith("/routing"):
-                self.send_json(200, account_routing_view(index))
+                self.send_json(200, hide_credential_fields(account_routing_view(index), hide))
             elif parsed.path.endswith("/prices"):
                 self.send_json(200, model_prices(query, include_custom=False))
             elif parsed.path.endswith("/analysis"):
-                self.send_json(200, analysis_view(query, LIVE_KEYS[index]["scope"]))
+                self.send_json(200, hide_credential_fields(analysis_view(query, LIVE_KEYS[index]["scope"]), hide))
             elif parsed.path.endswith("/analysis/speed"):
                 self.send_json(200, analysis_speed_view(query, LIVE_KEYS[index]["scope"]))
             elif parsed.path.endswith("/errors"):
-                self.send_json(200, error_view(query, LIVE_KEYS[index]["scope"]))
+                self.send_json(200, hide_credential_fields(error_view(query, LIVE_KEYS[index]["scope"]), hide))
             elif parsed.path.endswith("/ai-providers"):
                 self.send_json(200, {"providers": configured_provider_views(query, index)})
             elif parsed.path.endswith("/auth-files"):
@@ -1978,7 +2001,7 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self.reset_auth_quota(parsed, account_auth_files(index))
             elif parsed.path.endswith("/events"):
-                self.send_json(200, request_event_view(query, LIVE_KEYS[index]["scope"]))
+                self.send_json(200, hide_credential_fields(request_event_view(query, LIVE_KEYS[index]["scope"]), hide))
             return
         payload = payload_for(parsed.path, query)
         if payload is None:
@@ -2274,11 +2297,17 @@ def main():
         action="store_true",
         help="Allow API key users to reset Codex auth file quotas.",
     )
+    parser.add_argument(
+        "--hide-api-key-view-credentials",
+        action="store_true",
+        help="Hide credential access, auth files, AI providers, and request sources from API key users.",
+    )
     args = parser.parse_args()
     seed_paginated_history()
     Handler.host_mode = args.host
     Handler.initial_theme = args.theme
     Handler.allow_api_key_quota_reset = args.allow_api_key_quota_reset
+    Handler.hide_api_key_view_credentials = args.hide_api_key_view_credentials
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     entry_path = "/ui" if args.host == "standalone" else "/"
     print(

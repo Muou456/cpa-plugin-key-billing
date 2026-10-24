@@ -322,11 +322,18 @@ const PAGE_TAB_ROWS = Array.from(document.querySelectorAll(".page-tabs-row"));
 let tabLayoutFrame = 0;
 
 // The select stands in for the tab bar when the tabs do not fit; it mirrors their labels and active tab.
+function populatePageTabSelect(row) {
+  const tabs = Array.from(row.querySelectorAll(".tabs > button:not(.hidden)"));
+  row.querySelector(".page-tab-select > select").replaceChildren(
+    ...tabs.map((button) => el("option", { value: button.dataset.tab || button.dataset.accountTab }, window.billingI18n.boundText(button)))
+  );
+}
+
 for (const row of PAGE_TAB_ROWS) {
   const select = row.querySelector(".page-tab-select > select");
   const tabs = Array.from(row.querySelectorAll(".tabs > button"));
   const tabName = (button) => button.dataset.tab || button.dataset.accountTab;
-  select.replaceChildren(...tabs.map((button) => el("option", { value: tabName(button) }, window.billingI18n.boundText(button))));
+  populatePageTabSelect(row);
   select.onchange = () => {
     tabs.find((button) => tabName(button) === select.value).click();
     // A refused switch leaves the previous tab active.
@@ -385,7 +392,7 @@ function updatePageControls(account, page) {
 }
 
 function setAccountTab(tab) {
-  accountTab = ACCOUNT_TAB_IDS.includes(tab) ? tab : "subscription";
+  accountTab = ACCOUNT_TAB_IDS.includes(tab) && !accountTabHidden(tab) ? tab : "subscription";
   writePageRoute("account", accountTab);
   document.querySelectorAll("[data-account-tab]").forEach((button) => {
     const active = button.dataset.accountTab === accountTab;

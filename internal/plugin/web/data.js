@@ -726,8 +726,16 @@ function loadPage(account, { reload = false } = {}) {
   const page = pages[role][activeTab(account)];
   const generation = sessionGeneration;
   const task = (async () => {
-    if (account) await loadDataGroup(true, "profile", reload);
+    if (account) {
+      await loadDataGroup(true, "profile", reload);
+      if (generation === sessionGeneration) applyAccountCredentialVisibility();
+    }
     if (generation !== sessionGeneration || currentPage() !== page) return;
+    if (account && accountTabHidden(accountTab)) {
+      setAccountTab("subscription");
+      loadPage(true).catch(fail);
+      return;
+    }
     const tasks = [];
     if (!account || resources.account.profile.value?.tracked) {
       tasks.push(...page.groups.map((name) => loadDataGroup(account, name, reload)));

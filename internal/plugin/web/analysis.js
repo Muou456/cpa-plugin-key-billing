@@ -570,6 +570,7 @@ function renderAnalysisDistribution(account, { colors = analysisColors(), animat
   const target = $(account ? "account-usage-distribution" : "usage-distribution");
   const labels = { api_keys: "API Key", models: m("ui.model"), sources: m("ui.source") };
   if (account || $("analysis-key").value) delete labels.api_keys;
+  if (account && accountHidesCredentials()) delete labels.sources;
   const dimension = labels[analysisDimensions[role]] ? analysisDimensions[role] : "models";
   const metric = analysisMetrics[role];
   const rows = compactDistribution(analysis.usage_distribution[dimension], metric);

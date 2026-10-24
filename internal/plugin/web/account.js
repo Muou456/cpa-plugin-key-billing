@@ -1,3 +1,22 @@
+const CREDENTIAL_TAB_IDS = ["auth-files", "ai-providers"];
+
+// The server withholds the same data; hiding its controls keeps the page from asking for it.
+function accountHidesCredentials() { return resources.account.profile.value?.hide_credentials === true; }
+
+function accountTabHidden(tab) { return CREDENTIAL_TAB_IDS.includes(tab) && accountHidesCredentials(); }
+
+function applyAccountCredentialVisibility() {
+  const hidden = accountHidesCredentials();
+  for (const tab of CREDENTIAL_TAB_IDS) document.querySelector(`[data-account-tab="${tab}"]`).classList.toggle("hidden", hidden);
+  for (const id of ["account-request-event-source", "account-error-source"]) {
+    $(id).parentElement.classList.toggle("hidden", hidden);
+    // A restored source filter would be refused by the server.
+    if (hidden) $(id).value = "";
+  }
+  populatePageTabSelect($("account-page-tab-select").closest(".page-tabs-row"));
+  $("account-page-tab-select").value = accountTab;
+}
+
 function renderAccountProfile() {
   const profile = resources.account.profile.value;
   const tracked = profile?.tracked === true;
@@ -105,12 +124,14 @@ function renderAccountAccess(access) {
         el("div", { class: "account-access-scope-label", text: m("ui.model_access") }),
         settingsChipList(modelItems)
       ),
-      el(
-        "div",
-        { class: "inset-card" },
-        el("div", { class: "account-access-scope-label", text: m("ui.credential_access") }),
-        settingsChipList(credentialItems)
-      )
+      accountHidesCredentials()
+        ? null
+        : el(
+            "div",
+            { class: "inset-card" },
+            el("div", { class: "account-access-scope-label", text: m("ui.credential_access") }),
+            settingsChipList(credentialItems)
+          )
     )
   ];
   if (access.warnings?.length)

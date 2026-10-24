@@ -28,6 +28,7 @@ type accountProfileResponse struct {
 	Tracked           bool            `json:"tracked"`
 	Identity          accountIdentity `json:"identity"`
 	CanResetAuthQuota bool            `json:"can_reset_auth_quota"`
+	HideCredentials   bool            `json:"hide_credentials"`
 }
 
 type accountSubscriptionResponse struct {
@@ -59,7 +60,8 @@ func (a *App) accountProfile(access viewAccess) ManagementResponse {
 	response := accountProfileResponse{Tracked: access.Tracked}
 	if access.Tracked {
 		response.Identity = accountIdentity{Preview: access.Key.Preview, Label: access.Key.Label}
-		response.CanResetAuthQuota = a.store.AllowAPIKeyQuotaReset()
+		response.CanResetAuthQuota = a.store.AllowAPIKeyQuotaReset() && !access.HideCredentials
+		response.HideCredentials = access.HideCredentials
 	}
 	return viewJSON(access, http.StatusOK, response)
 }
@@ -85,7 +87,7 @@ func (a *App) accountRouting(access viewAccess) ManagementResponse {
 		Credentials: []accountRouteCredential{}, DeniedCredentials: []accountRouteCredential{},
 		CatalogFiltered: a.filtersModelCatalogs(), Warnings: []string{},
 	}
-	if !decision.RestrictsCredentials() {
+	if !decision.RestrictsCredentials() || access.HideCredentials {
 		return viewJSON(access, http.StatusOK, response)
 	}
 	if err := a.refreshCredentialInventory(); err != nil {

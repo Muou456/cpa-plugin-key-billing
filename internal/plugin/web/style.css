@@ -972,6 +972,7 @@ body.embedded .standalone-actions { display: none; }
 }
 .account-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-items: stretch; }
 .account-access-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.account-access-summary > :only-child { grid-column: 1 / -1; }
 .account-access-scope-label { margin-bottom: 8px; color: var(--text-tertiary); font-size: 11px; font-weight: 600; }
 .account-access-chips { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
 .details-summary::-webkit-details-marker { display: none; }

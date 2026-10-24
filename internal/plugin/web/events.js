@@ -168,7 +168,9 @@ function csvCell(value) {
 
 function eventCSV(entries, kind, account) {
   const columns = EVENT_CSV_COLUMNS[kind].filter(
-    (column) => !account || !["preview", "label", "base_url", "credential_ref"].includes(column)
+    (column) =>
+      !account ||
+      (!["preview", "label", "base_url", "credential_ref"].includes(column) && !(column === "source" && accountHidesCredentials()))
   );
   const lines = [columns.map(csvCell).join(",")];
   for (const record of entries) {

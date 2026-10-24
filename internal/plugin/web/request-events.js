@@ -13,15 +13,17 @@ const REQUEST_EVENT_COLUMNS = [
   { id: "model", label: m("ui.model"), class: "small", cell: requestEventModel },
   {
     id: "executor_source",
-    label: m("ui.executor_source"),
+    get label() { return hidesRequestSources() ? m("ui.executor") : m("ui.executor_source"); },
     class: "small",
     cell: ({ entry }) => [
       el("div", { class: "request-event-cell-line mono" }, entry.executor_type || m("ui.unknown_executor")),
-      el(
-        "div",
-        { class: "request-event-detail muted", "data-tip": displayLabel(entry.source) || null, "data-tip-overflow": "" },
-        entry.source ? maskedLabelText(entry.source) : m("ui.unknown_source")
-      )
+      hidesRequestSources()
+        ? null
+        : el(
+            "div",
+            { class: "request-event-detail muted", "data-tip": displayLabel(entry.source) || null, "data-tip-overflow": "" },
+            entry.source ? maskedLabelText(entry.source) : m("ui.unknown_source")
+          )
     ]
   },
   {
@@ -102,6 +104,8 @@ const REQUEST_EVENT_COLUMNS = [
       )
   }
 ];
+
+function hidesRequestSources() { return currentRole === "account" && accountHidesCredentials(); }
 
 function requestEventFilters(account) {
   const prefix = account ? "account-request-event" : "request-event";
