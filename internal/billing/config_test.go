@@ -7,7 +7,7 @@ func TestDecodeConfigDefaults(t *testing.T) {
 	if errDecode != nil {
 		t.Fatalf("DecodeConfig: %v", errDecode)
 	}
-	if !cfg.Enabled || cfg.Debug || cfg.CodexFastModeBilling || cfg.MaskAPIKeyViewEmails || cfg.AllowAPIKeyQuotaReset || cfg.StateFile != DefaultStateFile {
+	if !cfg.Enabled || cfg.Debug || cfg.CodexFastModeBilling || cfg.MaskAPIKeyViewEmails || cfg.AllowAPIKeyQuotaReset || cfg.AllowUnpricedModels || cfg.StateFile != DefaultStateFile {
 		t.Fatalf("config = %+v", cfg)
 	}
 	if cfg.Routing != DefaultConfig().Routing {
@@ -17,8 +17,8 @@ func TestDecodeConfigDefaults(t *testing.T) {
 	if errDecode != nil || cfg.Routing.Strategy != "weighted-round-robin" || !cfg.Routing.SessionAffinity || cfg.Routing.SessionAffinityTTL != "30m" {
 		t.Fatalf("routing = %+v, error = %v", cfg.Routing, errDecode)
 	}
-	cfg, errDecode = DecodeConfig([]byte("enabled: true\ndebug: true\ncodex_fast_mode_billing: true\nmask_api_key_view_emails: true\nallow_api_key_quota_reset: true\n"))
-	if errDecode != nil || !cfg.Debug || !cfg.CodexFastModeBilling || !cfg.MaskAPIKeyViewEmails || !cfg.AllowAPIKeyQuotaReset {
+	cfg, errDecode = DecodeConfig([]byte("enabled: true\ndebug: true\ncodex_fast_mode_billing: true\nmask_api_key_view_emails: true\nallow_api_key_quota_reset: true\nallow_unpriced_models: true\n"))
+	if errDecode != nil || !cfg.Debug || !cfg.CodexFastModeBilling || !cfg.MaskAPIKeyViewEmails || !cfg.AllowAPIKeyQuotaReset || !cfg.AllowUnpricedModels {
 		t.Fatalf("config = %+v, error = %v", cfg, errDecode)
 	}
 }

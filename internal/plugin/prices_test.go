@@ -51,6 +51,26 @@ func TestPriceAdmissionAndDeleteWithoutInventory(t *testing.T) {
 	callOK(t, app, http.MethodPut, routePrices, nil, billing.CustomPrice{ModelID: "gpt-*"}, 200, nil)
 }
 
+func TestUnpricedAdmissionWhenAllowed(t *testing.T) {
+	app := newTestApp(t)
+	t.Cleanup(app.Shutdown)
+	configYAML := append(testConfigYAML(t, true), []byte("allow_unpriced_models: true\n")...)
+	raw, errHandle := app.HandleMethod(MethodPluginRegister, mustMarshal(t, LifecycleRequest{ConfigYAML: configYAML}))
+	if errHandle != nil {
+		t.Fatalf("plugin.register error = %v", errHandle)
+	}
+	decodeResult(t, raw, nil)
+	raw, err := app.HandleMethod(MethodRequestInterceptBefore, mustMarshal(t, RequestInterceptRequest{SourceFormat: "openai", Model: "unpriced-dummy", RequestedModel: "unpriced-dummy"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result RequestInterceptResponse
+	decodeResult(t, raw, &result)
+	if result.Terminate {
+		t.Fatal("unpriced model rejected", result)
+	}
+}
+
 func TestBuiltinPriceAdmissionAndListing(t *testing.T) {
 	app := newConfiguredApp(t)
 	for _, test := range []struct {

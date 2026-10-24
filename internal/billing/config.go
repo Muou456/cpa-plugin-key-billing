@@ -19,6 +19,7 @@ type Config struct {
 	CodexFastModeBilling  bool          `yaml:"codex_fast_mode_billing"`
 	MaskAPIKeyViewEmails  bool          `yaml:"mask_api_key_view_emails"`
 	AllowAPIKeyQuotaReset bool          `yaml:"allow_api_key_quota_reset"`
+	AllowUnpricedModels   bool          `yaml:"allow_unpriced_models"`
 	Routing               RoutingConfig `yaml:"routing"`
 }
 

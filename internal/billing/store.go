@@ -176,6 +176,12 @@ func (s *Store) AllowAPIKeyQuotaReset() bool {
 	return s.cfg.AllowAPIKeyQuotaReset
 }
 
+func (s *Store) AllowUnpricedModels() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.AllowUnpricedModels
+}
+
 func (s *Store) read(fn func(*State)) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

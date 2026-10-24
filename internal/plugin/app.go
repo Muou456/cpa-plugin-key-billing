@@ -175,6 +175,12 @@ func (a *App) registration() Registration {
 					Description: "Allow API key users to reset Codex and Claude auth file quotas using upstream resets",
 				},
 				{
+					Name:        "allow_unpriced_models",
+					Default:     defaults.AllowUnpricedModels,
+					Type:        "boolean",
+					Description: "Admit requests for models without any price; usage is recorded at zero cost",
+				},
+				{
 					Name:        "state_file",
 					Default:     defaults.StateFile,
 					Type:        "string",
