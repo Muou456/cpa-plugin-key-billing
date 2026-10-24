@@ -272,6 +272,8 @@ PLANS = [
     {"id": "production", "name": "生产服务", "windows": [
         {"id": "short", "name": "峰值保护", "amount_usd": 0, "request_limit": 200, "token_limit": 0,
          "period_seconds": 7200, "cycle_anchor_at": iso(NOW + timedelta(hours=2))},
+        {"id": "codex", "name": "Codex 额度", "provider": "codex", "amount_usd": 0, "request_limit": 80,
+         "period_seconds": 7200, "cycle_anchor_at": iso(NOW + timedelta(hours=2))},
         {"id": "medium", "name": "服务额度", "amount_usd": 0, "request_limit": 0, "token_limit": 2000000,
          "period_seconds": 86400, "cycle_anchor_at": iso((NOW + timedelta(days=1)).replace(hour=0))},
         {"id": "budget", "name": "生产预算", "amount_usd": 1000,
@@ -298,6 +300,7 @@ def refresh_key_quota(key):
         started = (cycle.get("plan_id") == key["plan_id"]
                    and cycle.get("period_seconds") == window["period_seconds"]
                    and cycle.get("cycle_anchor_at") == window.get("cycle_anchor_at")
+                   and cycle.get("provider", "") == window.get("provider", "")
                    and (key.get("deleted_at") or datetime.fromisoformat(cycle["end_at"].replace("Z", "+00:00")) > now))
         if started:
             cycles[window["id"]] = cycle
@@ -318,11 +321,13 @@ def refresh_key_quota(key):
         view = dict(id=window["id"], name=window["name"], period_seconds=window["period_seconds"],
                     started=started, blocked=any(dimension["blocked"] for dimension in dimensions),
                     dimensions=dimensions)
+        if window.get("provider"):
+            view["provider"] = window["provider"]
         if window.get("cycle_anchor_at"):
             view["cycle_anchor_at"] = window["cycle_anchor_at"]
         if started:
             view.update(start_at=cycle["start_at"], end_at=cycle["end_at"])
-        if view["blocked"]:
+        if view["blocked"] and not window.get("provider") and view.get("end_at"):
             key["blocked"] = True
             key["retry_at"] = max(key.get("retry_at", ""), view["end_at"])
         key["windows"].append(view)
@@ -912,12 +917,12 @@ def make_key(index):
     cycles = {}
     for position, window in enumerate(plan["windows"] if plan and index != 4 else []):
         ratio = profile["spent_usd"] / plan["windows"][-1]["amount_usd"]
-        if index == 2 and position == 0 or index == 3 and position < 2:
+        if index == 2 and position == 0 or index == 3 and position == 1:
             ratio = 1.05
         end = (datetime.fromisoformat(window["cycle_anchor_at"].replace("Z", "+00:00"))
                if window.get("cycle_anchor_at") else NOW + timedelta(seconds=window["period_seconds"] * (0.3 + index * 0.04)))
         cycles[window["id"]] = dict(plan_id=result["plan_id"], period_seconds=window["period_seconds"],
-            cycle_anchor_at=window.get("cycle_anchor_at"),
+            cycle_anchor_at=window.get("cycle_anchor_at"), provider=window.get("provider", ""),
             spent_usd=window["amount_usd"]*ratio,
             used_requests=int(window.get("request_limit", 1000)*ratio),
             used_tokens=int(window.get("token_limit", 10000000)*ratio),
@@ -2215,7 +2220,7 @@ class Handler(BaseHTTPRequestHandler):
             stored.update({key: body[key] for key in ("name", "windows") if key in body})
             for index, window in enumerate(stored["windows"]):
                 window.setdefault("id", str(time.time_ns()) + "-" + str(index))
-            stored["windows"].sort(key=lambda window: window["period_seconds"])
+            stored["windows"].sort(key=lambda window: (window["period_seconds"], window.get("provider", "")))
             if "scopes" in body:
                 scopes = set(body["scopes"])
                 for key in KEYS:

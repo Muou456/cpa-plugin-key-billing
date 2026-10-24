@@ -231,6 +231,7 @@ func TestQuotaConfigurationExtendsExistingJSON(t *testing.T) {
 	cycle.UsedTokens, cycle.UsedRequests = tokenLimit, 7
 	state.Keys["dummy-scope"].Cycles["w"] = cycle
 	state.Plans[0].Windows = append(state.Plans[0].Windows,
+		billing.QuotaWindow{ID: "codex", Name: "Codex", Provider: "codex", PeriodSeconds: 3600, RequestLimit: 10},
 		billing.QuotaWindow{ID: "tokens", Name: "Token", PeriodSeconds: 7200, TokenLimit: 1000},
 		billing.QuotaWindow{ID: "requests", Name: "请求", PeriodSeconds: 86400, RequestLimit: 100})
 	for i := range state.Plans[0].Windows {

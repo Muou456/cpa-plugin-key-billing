@@ -458,6 +458,8 @@
   "ui.the_next_cycle_must_start_within_one_period_from_now": "下个周期开始时间不能超过当前时间加一个周期",
   "ui.next_cycle_start": "下个周期开始时间",
   "ui.window_name": "窗口名称",
+  "ui.provider": "供应商",
+  "ui.all_providers_total": "全部供应商（总额度）",
   "ui.reset_period": "重置周期",
   "ui.period_unit": "周期单位",
   "ui.delete_window": "删除窗口",

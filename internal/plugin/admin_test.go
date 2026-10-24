@@ -173,6 +173,45 @@ func TestPlansCRUDThroughTheManagementAPI(t *testing.T) {
 	}
 }
 
+func TestProviderWindowsRoundTripThroughTheManagementAPI(t *testing.T) {
+	app := newConfiguredApp(t)
+
+	var created struct {
+		Plan billing.Plan `json:"plan"`
+	}
+	callOK(t, app, http.MethodPost, routePlans, nil, map[string]any{
+		"name": "Provider plan",
+		"windows": []billing.QuotaWindow{
+			{Name: "Total", RequestLimit: 10, PeriodSeconds: 3600},
+			{Name: "Codex", Provider: " Codex ", RequestLimit: 5, PeriodSeconds: 3600},
+		},
+	}, http.StatusCreated, &created)
+	if len(created.Plan.Windows) != 2 || created.Plan.Windows[0].Provider != "" || created.Plan.Windows[1].Provider != "codex" {
+		t.Fatalf("created plan = %+v", created.Plan)
+	}
+
+	var listed struct {
+		Plans []billing.Plan `json:"plans"`
+	}
+	callOK(t, app, http.MethodGet, routePlans, nil, nil, http.StatusOK, &listed)
+	if len(listed.Plans) != 1 || len(listed.Plans[0].Windows) != 2 || listed.Plans[0].Windows[1].Provider != "codex" {
+		t.Fatalf("listed plans = %+v", listed.Plans)
+	}
+
+	windows := slices.Clone(created.Plan.Windows)
+	windows[1].Provider = "xai"
+	var patched struct {
+		Plan billing.Plan `json:"plan"`
+	}
+	callOK(t, app, http.MethodPatch, routePlans, nil, map[string]any{
+		"id":      created.Plan.ID,
+		"windows": windows,
+	}, http.StatusOK, &patched)
+	if patched.Plan.Windows[1].Provider != "xai" || patched.Plan.Windows[0].Provider != "" {
+		t.Fatalf("patched plan = %+v", patched.Plan)
+	}
+}
+
 func TestKeyResetAcceptsScopeList(t *testing.T) {
 	for _, unified := range []bool{false, true} {
 		t.Run(fmt.Sprint(unified), func(t *testing.T) {

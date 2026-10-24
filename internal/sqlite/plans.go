@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"cmp"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -52,9 +51,7 @@ func (d *DB) loadPlans(state *billing.State) error {
 		if err := plan.Validate(); err != nil {
 			return err
 		}
-		slices.SortFunc(plan.Windows, func(a, b billing.QuotaWindow) int {
-			return cmp.Compare(a.PeriodSeconds, b.PeriodSeconds)
-		})
+		slices.SortFunc(plan.Windows, billing.CompareQuotaWindows)
 		state.Plans = append(state.Plans, plan)
 	}
 	if errRows := rows.Err(); errRows != nil {

@@ -17,14 +17,21 @@ type Plan struct {
 }
 
 // Zero disables a quota dimension. An absent anchor starts cycles on admission.
+// An empty provider makes a total window that counts every request; otherwise
+// the window counts and limits only requests served by that provider.
 type QuotaWindow struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
+	Provider      string    `json:"provider,omitempty"`
 	PeriodSeconds int64     `json:"period_seconds"`
 	AmountUSD     float64   `json:"amount_usd"`
 	TokenLimit    int64     `json:"token_limit"`
 	RequestLimit  int64     `json:"request_limit"`
 	CycleAnchorAt time.Time `json:"cycle_anchor_at,omitzero"`
+}
+
+func normalizeQuotaProvider(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
 }
 
 const maxPeriodSeconds = int64(math.MaxInt64) / int64(time.Second)
@@ -39,9 +46,13 @@ func (p Plan) Validate() error {
 	if len(p.Windows) == 0 {
 		return invalidf("A subscription plan requires at least one quota window")
 	}
+	type providerPeriod struct {
+		provider string
+		seconds  int64
+	}
 	ids := make(map[string]bool)
 	names := make(map[string]bool)
-	periods := make(map[int64]bool)
+	periods := make(map[providerPeriod]bool)
 	for _, window := range p.Windows {
 		if window.ID == "" || ids[window.ID] {
 			return invalidf("Invalid or duplicate quota window ID")
@@ -65,7 +76,12 @@ func (p Plan) Validate() error {
 		if window.PeriodSeconds <= 0 || window.PeriodSeconds > maxPeriodSeconds {
 			return invalidf("Window %q: period must be between 1 and %d seconds", name, maxPeriodSeconds)
 		}
-		if periods[window.PeriodSeconds] {
+		if window.Provider != normalizeQuotaProvider(window.Provider) || len(window.Provider) > maxRouteValueBytes ||
+			strings.ContainsAny(window.Provider, "*[]\x00") {
+			return invalidf("Invalid provider identifier")
+		}
+		period := providerPeriod{window.Provider, window.PeriodSeconds}
+		if periods[period] {
 			return invalidf("Window %q has the same period as another window", name)
 		}
 		if window.CycleAnchorAt.IsZero() != p.Windows[0].CycleAnchorAt.IsZero() {
@@ -74,7 +90,7 @@ func (p Plan) Validate() error {
 		if !window.CycleAnchorAt.IsZero() && (window.CycleAnchorAt.Year() < 1970 || window.CycleAnchorAt.Year() > 9999 || window.CycleAnchorAt.Nanosecond() != 0) {
 			return invalidf("Window %q: cycle start must be between years 1970 and 9999 with second precision", name)
 		}
-		ids[window.ID], names[strings.ToLower(name)], periods[window.PeriodSeconds] = true, true, true
+		ids[window.ID], names[strings.ToLower(name)], periods[period] = true, true, true
 	}
 	return nil
 }
@@ -84,6 +100,7 @@ func prepareWindows(windows, existing []QuotaWindow, now time.Time) ([]QuotaWind
 	for i := range windows {
 		window := &windows[i]
 		window.Name = strings.TrimSpace(window.Name)
+		window.Provider = normalizeQuotaProvider(window.Provider)
 		oldIndex := slices.IndexFunc(existing, func(old QuotaWindow) bool { return old.ID == window.ID })
 		if window.ID == "" {
 			var id [16]byte
@@ -102,10 +119,14 @@ func prepareWindows(windows, existing []QuotaWindow, now time.Time) ([]QuotaWind
 			}
 		}
 	}
-	slices.SortFunc(windows, func(a, b QuotaWindow) int {
-		return cmp.Compare(a.PeriodSeconds, b.PeriodSeconds)
-	})
+	slices.SortFunc(windows, CompareQuotaWindows)
 	return windows, nil
+}
+
+// CompareQuotaWindows orders windows by period, with the total window of a
+// period before its provider windows.
+func CompareQuotaWindows(a, b QuotaWindow) int {
+	return cmp.Or(cmp.Compare(a.PeriodSeconds, b.PeriodSeconds), cmp.Compare(a.Provider, b.Provider))
 }
 
 func (w QuotaWindow) sameSchedule(other QuotaWindow) bool {
@@ -241,7 +262,8 @@ func (s *Store) UpdatePlanWithBindings(patch PlanPatch, scopes *[]string) (Plan,
 			if patch.Windows != nil {
 				for _, old := range state.Plans[i].Windows {
 					if !slices.ContainsFunc(updated.Windows, func(window QuotaWindow) bool {
-						return window.ID == old.ID && window.sameSchedule(old)
+						// Usage counted for one provider does not carry over to another.
+						return window.ID == old.ID && window.sameSchedule(old) && window.Provider == old.Provider
 					}) {
 						resetWindows = append(resetWindows, old.ID)
 					}

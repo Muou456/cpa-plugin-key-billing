@@ -117,6 +117,8 @@ const PROVIDER_LABELS = {
   openai: "OpenAI"
 };
 
+function providerLabel(provider) { return PROVIDER_LABELS[provider] || provider; }
+
 function credentialRoutingTag(credential) {
   const priority = credential.priority ?? "—";
   const weight = credential.weight ?? "—";

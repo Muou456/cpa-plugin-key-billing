@@ -70,7 +70,7 @@ const resourceGroups = {
   }
 };
 // These are also page dependencies, even when the editor is still closed.
-const EDITOR_RESOURCES = { plan: ["keys", "plans"], route: ["keys", "routes", "credentials", "models"] };
+const EDITOR_RESOURCES = { plan: ["keys", "plans", "credentials"], route: ["keys", "routes", "credentials", "models"] };
 
 // A query caches one explicit selection. Changing that selection or starting
 // a new session discards the result; elapsed time never invalidates it.

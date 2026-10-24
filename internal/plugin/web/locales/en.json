@@ -458,6 +458,8 @@
   "ui.the_next_cycle_must_start_within_one_period_from_now": "The next cycle must start within one period from now",
   "ui.next_cycle_start": "Next cycle start",
   "ui.window_name": "Window name",
+  "ui.provider": "Provider",
+  "ui.all_providers_total": "All providers (total)",
   "ui.reset_period": "Reset interval",
   "ui.period_unit": "Period unit",
   "ui.delete_window": "Delete window",

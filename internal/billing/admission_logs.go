@@ -16,7 +16,7 @@ func (s *Store) ReportQuotaBlock(scope, endpoint string, decision Decision) {
 		return
 	}
 	scope = strings.TrimSpace(scope)
-	if scope == "" || !s.blocked.onset(scope, decision.blockSignature()) {
+	if scope == "" || !s.blocked.onset(scope, decision.Provider, decision.blockSignature()) {
 		return
 	}
 	name := ""
@@ -28,6 +28,10 @@ func (s *Store) ReportQuotaBlock(scope, endpoint string, decision Decision) {
 	if endpoint = strings.TrimSpace(endpoint); endpoint != "" {
 		message.WriteString(" → ")
 		message.WriteString(endpoint)
+	}
+	if decision.Provider != "" {
+		message.WriteString(", provider ")
+		message.WriteString(decision.Provider)
 	}
 	for _, window := range decision.Windows {
 		for _, balance := range window.Dimensions {
@@ -50,9 +54,11 @@ func (s *Store) ReportQuotaBlock(scope, endpoint string, decision Decision) {
 	s.AddPluginLog(PluginLogInfo, "%s", message.String())
 }
 
+// blockedKeys remembers the last reported block of each key's total quota
+// (provider "") and of each provider quota, so a block is logged on onset only.
 type blockedKeys struct {
 	mu     sync.Mutex
-	states map[string]string
+	states map[string]map[string]string
 }
 
 func (d Decision) blockSignature() string {
@@ -71,17 +77,30 @@ func (d Decision) blockSignature() string {
 	return value.String()
 }
 
-func (b *blockedKeys) onset(scope, signature string) bool {
+func (b *blockedKeys) onset(scope, provider, signature string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.states == nil {
-		b.states = make(map[string]string)
+		b.states = make(map[string]map[string]string)
 	}
-	if previous, exists := b.states[scope]; exists && previous == signature {
+	if b.states[scope] == nil {
+		b.states[scope] = make(map[string]string)
+	}
+	if previous, exists := b.states[scope][provider]; exists && previous == signature {
 		return false
 	}
-	b.states[scope] = signature
+	b.states[scope][provider] = signature
 	return true
+}
+
+// release forgets the block of one quota after a request passed it.
+func (b *blockedKeys) release(scope, provider string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.states[scope], provider)
+	if len(b.states[scope]) == 0 {
+		delete(b.states, scope)
+	}
 }
 
 func (b *blockedKeys) clear(scope string) {

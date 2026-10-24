@@ -118,7 +118,8 @@ func (s *Store) recordUsage(event UsageEvent, failure *RequestError) {
 				usage.Tokens = event.Breakdown.TotalTokens
 			}
 			missingCycleTime = event.RequestedAt.IsZero() && len(key.Cycles) > 0 && usage != (quotaUsage{})
-			key.chargeCycles(event.RequestedAt, usage)
+			plan, _ := state.FindPlan(key.PlanID)
+			key.chargeCycles(plan, provider, event.RequestedAt, usage)
 			settleExpiredCycles(key, at)
 			changedKeys = []string{scope}
 		}

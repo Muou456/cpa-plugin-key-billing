@@ -179,10 +179,11 @@ func (a *App) interceptAfterAuth(raw []byte) ([]byte, error) {
 	}
 	result, detail := "unrestricted", ""
 	var response RequestInterceptResponse
-	if a.store.Enabled() && metadataString(req.Metadata, MetadataSource) != SourcePluginHostModelCallback {
+	scope := metadataString(req.Metadata, MetadataCallerScope)
+	client := a.store.Enabled() && metadataString(req.Metadata, MetadataSource) != SourcePluginHostModelCallback
+	if client {
 		// Credential permissions are independent of model aliases. Recheck the
 		// current policy even when another scheduler made the selection.
-		scope := metadataString(req.Metadata, MetadataCallerScope)
 		decision := a.store.ResolveRouting(scope, req.Model, req.RequestedModel)
 		a.beginRouteLog(req.RequestID, scope, decision)
 		if decision.RestrictsCredentials() {
@@ -199,11 +200,36 @@ func (a *App) interceptAfterAuth(raw []byte) ([]byte, error) {
 			}
 		}
 	}
+	if client && !response.Terminate {
+		response = a.authorizeProviderQuota(req, scope)
+	}
 	if id := metadataString(req.Metadata, MetadataSelectedAuth); !response.Terminate && id != "" {
 		a.store.AssignSlotCredential(req.RequestID, billing.CredentialFingerprint(id))
 	}
 	a.observeRouteCredential(req, result, detail)
 	return OKEnvelope(response)
+}
+
+// The total quota was checked before auth. Only now is the provider known, so
+// its own windows are checked against the credential selected for this attempt.
+// A refusal of a streaming request lets the host try another credential.
+func (a *App) authorizeProviderQuota(req RequestInterceptRequest, scope string) RequestInterceptResponse {
+	if !a.store.LimitsProviders(scope) {
+		return RequestInterceptResponse{}
+	}
+	provider := a.selectedCredentialProvider(req)
+	if provider == "" {
+		a.store.AddPluginLog(billing.PluginLogDebug,
+			"Provider quota not checked: the provider of the selected upstream credential is unknown")
+		return RequestInterceptResponse{}
+	}
+	now := a.store.Now()
+	decision := a.store.AuthorizeProvider(scope, provider, now)
+	if decision.Allowed {
+		return RequestInterceptResponse{}
+	}
+	a.store.ReportQuotaBlock(scope, metadataString(req.Metadata, MetadataRequestPath), decision)
+	return quotaExhaustedResponse(req.SourceFormat, decision, now)
 }
 
 func (a *App) completeRequest(raw []byte) ([]byte, error) {
@@ -330,7 +356,12 @@ func modelForbiddenResponse(sourceFormat string, decision billing.RoutingDecisio
 
 func quotaExhaustedMessage(decision billing.Decision) string {
 	var builder strings.Builder
-	builder.WriteString("API key subscription quota exhausted:")
+	builder.WriteString("API key subscription quota exhausted")
+	if decision.Provider != "" {
+		builder.WriteString(" for provider ")
+		builder.WriteString(strconv.Quote(decision.Provider))
+	}
+	builder.WriteString(":")
 	for _, window := range decision.Windows {
 		for _, balance := range window.Dimensions {
 			if !balance.Blocked {
