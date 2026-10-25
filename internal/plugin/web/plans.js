@@ -19,26 +19,6 @@ const QUOTA_DIMENSIONS = [
   }
 ];
 const PERIOD_UNITS = [[86400, m("ui.days")], [3600, m("ui.hours")], [60, m("ui.minutes")], [1, m("ui.seconds")]];
-let planProviderOptions = [];
-
-function planProviderChoices(credentials, selected) {
-  const providers = new Set();
-  for (const item of credentials || []) {
-    const provider = String(item.provider || "").trim().toLowerCase();
-    if (provider) providers.add(provider);
-  }
-  for (const provider of selected || []) {
-    const value = String(provider || "").trim().toLowerCase();
-    if (value) providers.add(value);
-  }
-  return Array.from(providers).sort((left, right) => providerLabel(left).localeCompare(providerLabel(right), locale()));
-}
-
-function planWindowProvider(row) { return String(row.querySelector('[name="window_provider"]')?.value || "").trim().toLowerCase(); }
-
-function validatePlanPeriods() {
-  Array.from($("plan-windows").children).filter((row) => planWindowPeriod(row)).forEach(validatePlanPeriod);
-}
 
 function renderPlans() {
   if (renderDataPending($("plans-body"), [resources.admin.plans, resources.admin.keys], m("ui.loading"), "empty section-loading")) return;
@@ -60,8 +40,7 @@ function renderPlans() {
         );
         if (window.cycle_anchor_at)
           quotas.append(el("span", { class: "small muted", text: m("ui.next_reset_value", { v0: when(nextCycleStart(window)) }) }));
-        const provider = window.provider ? DISPLAY_SEPARATOR + providerLabel(window.provider) : "";
-        const field = settingsEntryField(window.name + DISPLAY_SEPARATOR + periodLabel(window.period_seconds) + provider, quotas);
+        const field = settingsEntryField(window.name + DISPLAY_SEPARATOR + periodLabel(window.period_seconds), quotas);
         field.classList.add("plan-window-summary");
         return field;
       });
@@ -123,16 +102,15 @@ function renderQuotaWindows(view, account = false) {
     view.windows.map((window) => {
       const dimensions = window.dimensions;
       const single = dimensions.length === 1;
-      const windowName = window.name + (window.provider ? DISPLAY_SEPARATOR + providerLabel(window.provider) : "");
       const reset = el("span", { class: "muted", text: quotaWindowResetLabel(window, account) });
       return el(
         "div",
         { class: "quota-window" + (single ? " quota-single" : "") },
-        single ? null : el("div", { class: "quota-title" }, el("b", { text: displayLabel(windowName) }), reset),
+        single ? null : el("div", { class: "quota-title" }, el("b", { text: displayLabel(window.name) }), reset),
         dimensions.map((balance) => {
           const metric = QUOTA_DIMENSIONS.find((item) => item.metric === balance.metric);
           const quota = remainingQuota(balance.used_percent);
-          const label = displayLabel(single ? windowName + (account ? DISPLAY_SEPARATOR + metric.label : "") : metric.label);
+          const label = displayLabel(single ? window.name + (account ? DISPLAY_SEPARATOR + metric.label : "") : metric.label);
           return el(
             "div",
             { class: "quota-metric" },
@@ -151,7 +129,7 @@ function renderQuotaWindows(view, account = false) {
               {
                 class: "bar",
                 role: "progressbar",
-                "aria-label": m("ui.valuevaluevalue_remaining_quota", { v0: windowName, v1: DISPLAY_SEPARATOR, v2: metric.label }),
+                "aria-label": m("ui.valuevaluevalue_remaining_quota", { v0: window.name, v1: DISPLAY_SEPARATOR, v2: metric.label }),
                 "aria-valuemin": "0",
                 "aria-valuemax": "100",
                 "aria-valuenow": String(Math.round(quota.percent))
@@ -172,7 +150,6 @@ function nextCycleStart(window, now = Date.now()) {
 }
 
 function sameWindowSchedule(left, right) {
-  if (String(left.provider || "").toLowerCase() !== String(right.provider || "").toLowerCase()) return false;
   if (left.period_seconds !== right.period_seconds || !!left.cycle_anchor_at !== !!right.cycle_anchor_at) return false;
   return (
     !left.cycle_anchor_at || (Date.parse(left.cycle_anchor_at) - Date.parse(right.cycle_anchor_at)) % (left.period_seconds * 1000) === 0
@@ -390,11 +367,7 @@ function validatePlanPeriod(row) {
   const seconds = planWindowPeriod(row);
   let message = "";
   if (!seconds) message = m("ui.the_period_must_be_a_positive_integer");
-  else if (
-    Array.from($("plan-windows").children).some(
-      (other) => other !== row && planWindowPeriod(other) === seconds && planWindowProvider(other) === planWindowProvider(row)
-    )
-  )
+  else if (Array.from($("plan-windows").children).some((other) => other !== row && planWindowPeriod(other) === seconds))
     message = m("ui.another_window_has_the_same_period");
   setPlanFieldError(row.querySelector('[name="window_period"]'), message);
   return !message;
@@ -429,8 +402,6 @@ function validatePlanAnchor(row, required = true) {
 function addPlanWindow(quotaWindow = {}) {
   const seconds = quotaWindow.period_seconds;
   const unit = seconds ? PERIOD_UNITS.find(([value]) => seconds % value === 0)[0] : 3600;
-  const provider = String(quotaWindow.provider || "").trim().toLowerCase();
-  const providerOptions = provider && !planProviderOptions.includes(provider) ? [provider, ...planProviderOptions] : planProviderOptions;
   const row = el("div", {
     class: "plan-window",
     "data-id": quotaWindow.id || "",
@@ -469,20 +440,6 @@ function addPlanWindow(quotaWindow = {}) {
   );
   row.append(
     field(m("ui.window_name"), el("input", { name: "window_name", value: quotaWindow.name || "", required: true })),
-    field(
-      m("ui.provider"),
-      el(
-        "span",
-        { class: "native-select" },
-        el(
-          "select",
-          { name: "window_provider", "aria-label": m("ui.provider") },
-          [["", m("ui.all_providers_total")], ...providerOptions.map((value) => [value, providerLabel(value)])].map(([value, label]) =>
-            el("option", { value, selected: value === provider, text: label })
-          )
-        )
-      )
-    ),
     field(
       m("ui.reset_period"),
       el(
@@ -531,8 +488,7 @@ function addPlanWindow(quotaWindow = {}) {
     )
   );
   row.addEventListener("input", (event) => {
-    if (event.target.name === "window_provider") validatePlanPeriods();
-    else if (["window_period", "window_unit"].includes(event.target.name)) syncPlanWindows();
+    if (["window_period", "window_unit"].includes(event.target.name)) syncPlanWindows();
     else if (event.target.name === "window_anchor") validatePlanAnchor(row, false);
   });
   row.append(
@@ -595,7 +551,6 @@ function editPlan(plan) {
     setText($("plan-save"), current ? m("ui.save") : m("ui.create"));
     $("plan-name").value = current?.name || "";
     $("plan-cycle-mode").value = current?.windows[0]?.cycle_anchor_at ? "unified" : "independent";
-    planProviderOptions = planProviderChoices(data.credentials, (current?.windows || []).map((window) => window.provider));
     $("plan-windows").replaceChildren();
     (current ? current.windows : [{}]).forEach(addPlanWindow);
     renderPlanKeyList(id || "", data);
@@ -621,7 +576,6 @@ function planFromForm() {
     const limits = {};
     const periodInput = row.querySelector('[name="window_period"]');
     const name = nameInput.value.trim();
-    const provider = planWindowProvider(row);
 
     const seconds = planWindowPeriod(row);
     if (!name || new TextEncoder().encode(name).length > 128)
@@ -644,7 +598,6 @@ function planFromForm() {
     return {
       ...(row.dataset.id ? { id: row.dataset.id } : {}),
       name,
-      ...(provider ? { provider } : {}),
       ...limits,
       period_seconds: seconds,
       ...(anchor ? { cycle_anchor_at: anchor } : {})

@@ -46,7 +46,6 @@ type QuotaBalance struct {
 type QuotaWindowView struct {
 	ID            string         `json:"id"`
 	Name          string         `json:"name"`
-	Provider      string         `json:"provider,omitempty"`
 	PeriodSeconds int64          `json:"period_seconds"`
 	CycleAnchorAt time.Time      `json:"cycle_anchor_at,omitzero"`
 	Started       bool           `json:"started"`
@@ -65,7 +64,7 @@ type QuotaView struct {
 
 func (w QuotaWindow) view(cycle QuotaCycle) QuotaWindowView {
 	view := QuotaWindowView{
-		ID: w.ID, Name: w.Name, Provider: w.Provider, PeriodSeconds: w.PeriodSeconds, CycleAnchorAt: w.CycleAnchorAt,
+		ID: w.ID, Name: w.Name, PeriodSeconds: w.PeriodSeconds, CycleAnchorAt: w.CycleAnchorAt,
 		Started: !cycle.StartAt.IsZero(), StartAt: cycle.StartAt, EndAt: cycle.EndAt,
 		Dimensions: make([]QuotaBalance, 0, 3),
 	}
@@ -78,33 +77,15 @@ func (w QuotaWindow) view(cycle QuotaCycle) QuotaWindowView {
 	return view
 }
 
-// quotaView reports every window of the plan. Only total windows block the
-// key; a provider window blocks only requests to its provider.
 func quotaView(key *KeyState, plan Plan, now time.Time) QuotaView {
-	return windowsView(key, plan, plan.Windows, "", now)
-}
-
-// providerQuotaView reports only the windows of provider, where the empty
-// provider selects the total windows.
-func providerQuotaView(key *KeyState, plan Plan, provider string, now time.Time) QuotaView {
-	windows := make([]QuotaWindow, 0, len(plan.Windows))
+	view := QuotaView{Windows: make([]QuotaWindowView, 0, len(plan.Windows)), Unlimited: plan.ID == ""}
 	for _, window := range plan.Windows {
-		if window.Provider == provider {
-			windows = append(windows, window)
-		}
-	}
-	return windowsView(key, plan, windows, provider, now)
-}
-
-func windowsView(key *KeyState, plan Plan, windows []QuotaWindow, provider string, now time.Time) QuotaView {
-	view := QuotaView{Windows: make([]QuotaWindowView, 0, len(windows)), Unlimited: plan.ID == ""}
-	for _, window := range windows {
 		cycle := key.Cycles[window.ID]
 		if cycle.StartAt.IsZero() && !window.CycleAnchorAt.IsZero() {
 			cycle = window.newCycle(plan.ID, now)
 		}
 		item := window.view(cycle)
-		if item.Blocked && window.Provider == provider {
+		if item.Blocked {
 			view.Blocked = true
 			if item.EndAt.After(view.RetryAt) {
 				view.RetryAt = item.EndAt
@@ -163,17 +144,12 @@ func settleExpiredCycles(key *KeyState, now time.Time) bool {
 	return changed
 }
 
-// activateCycles starts the missing cycles of provider's windows, where the
-// empty provider selects the total windows.
-func activateCycles(key *KeyState, plan Plan, provider string, now time.Time) bool {
+func activateCycles(key *KeyState, plan Plan, now time.Time) bool {
 	if key.Cycles == nil {
 		key.Cycles = make(map[string]QuotaCycle)
 	}
 	changed := false
 	for _, window := range plan.Windows {
-		if window.Provider != provider {
-			continue
-		}
 		if _, exists := key.Cycles[window.ID]; !exists {
 			key.Cycles[window.ID] = window.newCycle(plan.ID, now)
 			changed = true
@@ -204,18 +180,12 @@ func (key *KeyState) ValidateCycles(plan Plan) error {
 }
 
 // Usage never starts a window or charges a replacement window with older usage.
-// Total windows count all usage; a provider window counts only its provider's.
-func (key *KeyState) chargeCycles(plan Plan, provider string, at time.Time, usage quotaUsage) {
-	if key.PlanID == "" || plan.ID != key.PlanID || at.IsZero() {
+func (key *KeyState) chargeCycles(at time.Time, usage quotaUsage) {
+	if key.PlanID == "" || at.IsZero() {
 		return
 	}
-	provider = normalizeQuotaProvider(provider)
 	for id, cycle := range key.Cycles {
 		if cycle.PlanID != key.PlanID || at.Before(cycle.StartAt) || at.Before(cycle.UsageSince) || !at.Before(cycle.EndAt) {
-			continue
-		}
-		index := slices.IndexFunc(plan.Windows, func(window QuotaWindow) bool { return window.ID == id })
-		if index < 0 || plan.Windows[index].Provider != "" && plan.Windows[index].Provider != provider {
 			continue
 		}
 		// Keep all dimensions, including currently disabled limits, so changing

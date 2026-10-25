@@ -168,34 +168,6 @@ func (a *App) selectedCredentialAllowed(req RequestInterceptRequest, decision bi
 	return routingAllowsCredential(id, identity.Source, identity.Provider, decision), nil
 }
 
-// selectedCredentialProvider names the provider of the credential the host
-// selected for this attempt, preferring identities already observed over a host
-// callback. It is empty when neither knows the credential.
-func (a *App) selectedCredentialProvider(req RequestInterceptRequest) string {
-	id := metadataString(req.Metadata, MetadataSelectedAuth)
-	if id == "" {
-		return ""
-	}
-	if item, ok := a.credentialByRawID(id); ok && item.Provider != "" {
-		return strings.ToLower(strings.TrimSpace(item.Provider))
-	}
-	index := metadataString(req.Metadata, MetadataSelectedIndex)
-	if index == "" || a.hostCaller == nil {
-		return ""
-	}
-	raw, err := a.hostCaller(hostAuthGetRuntime, map[string]string{"auth_index": index})
-	if err != nil {
-		return ""
-	}
-	var response struct {
-		Auth hostAuthFile `json:"auth"`
-	}
-	if err := json.Unmarshal(raw, &response); err != nil || response.Auth.ID != id || response.Auth.AuthIndex != index {
-		return ""
-	}
-	return strings.ToLower(strings.TrimSpace(firstNonEmptyString(response.Auth.Provider, response.Auth.Type)))
-}
-
 // host.auth.models backs model catalog filtering and explains routed requests
 // left without a credential. Older hosts fail this probe.
 func (a *App) probeHostAuthModels() bool {

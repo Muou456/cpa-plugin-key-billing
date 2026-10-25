@@ -131,7 +131,6 @@ http(s)://<CLIProxyAPI address>/v0/resource/plugins/cpa-key-billing/ui#account
 
 - Keys without a subscription plan still have their usage recorded, but have no subscription quota limit.
 - A plan can contain multiple quota windows. Each window can limit spending in USD, tokens, requests, or any combination of the three.
-- A window can optionally target one upstream provider. Unscoped windows remain total quotas; provider-scoped windows count only that provider's requests and are checked after the total quota passes.
 - Usage is tracked separately for each key, even when keys share a plan. Independent cycles start when the first request is admitted. Shared cycles use the configured schedule for every bound key.
 - A manual quota reset keeps shared reset times unchanged. Independent cycles restart when the next request is admitted.
 - Custom model prices take precedence over models.dev reference prices. Requests are rejected if neither is available.
